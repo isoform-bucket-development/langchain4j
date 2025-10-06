@@ -61,11 +61,14 @@
         "notes": "Module structure not yet implemented"
       },
       "expectation": "OpenTelemetry module should initialize and auto-register listeners without breaking existing functionality",
-      "prediction": "Module does not exist yet, tests will fail with ClassNotFoundException",
+      "prediction": "All 6 tests fail with ClassNotFoundException and missing SPI registration as expected in TDD red phase",
       "explanation": [
-        "langchain4j-opentelemetry module needs to be created",
-        "Maven dependencies for OpenTelemetry SDK must be added",
-        "SPI registration file must be created in META-INF/services"
+        "Test: shouldAutoRegisterOpenTelemetryListenersViaSPI - FAIL: SPI registration file missing",
+        "Test: shouldCreateOpenTelemetryAiServiceListener - FAIL: OpenTelemetryAiServiceListener class not found",
+        "Test: shouldCreateOpenTelemetryChatModelListener - FAIL: OpenTelemetryChatModelListener class not found",
+        "Test: shouldRespectOtelServiceNameEnvironmentVariable - FAIL: Configuration handling not implemented",
+        "Test: shouldLoadWithoutOpenTelemetryDependencyConflicts - FAIL: Module structure not implemented",
+        "Test: shouldInitializeModuleWithinPerformanceThreshold - FAIL: No module to time"
       ],
       "status": "fail"
     },
@@ -135,11 +138,13 @@
         "notes": "OpenTelemetryAiServiceListener not yet implemented"
       },
       "expectation": "AiService invocations should create structured OpenTelemetry spans with proper parent-child relationships",
-      "prediction": "Tests will fail because OpenTelemetryAiServiceListener class does not exist",
+      "prediction": "All 5 tests fail with OpenTelemetryAiServiceListener implementation missing as expected in TDD red phase",
       "explanation": [
-        "OpenTelemetryAiServiceListener needs to implement multiple listener interfaces",
-        "Span creation and context propagation logic must be implemented",
-        "GenAI semantic convention attributes need to be added to spans"
+        "Test: shouldCreateRootSpanOnAiServiceStarted - FAIL: OpenTelemetryAiServiceListener class not yet implemented",
+        "Test: shouldSetProperSpanAttributesOnStarted - FAIL: Attribute setting logic doesn't exist",
+        "Test: shouldCloseSpanOnAiServiceCompleted - FAIL: Completion handling doesn't exist",
+        "Test: shouldRecordErrorOnAiServiceError - FAIL: Error handling doesn't exist",
+        "Test: shouldPropagateContextBetweenSpans - FAIL: Context propagation logic doesn't exist"
       ],
       "status": "fail"
     },
