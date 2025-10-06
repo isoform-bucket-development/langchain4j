@@ -1,0 +1,613 @@
+{
+  "project_name": "add opentelemetry",
+  "scenarios": [
+    {
+      "id": 1,
+      "name": "OpenTelemetry Module Initialization",
+      "description": "Test that langchain4j-opentelemetry module can be initialized with both OTel Agent and SDK Autoconfigure patterns",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Create langchain4j-opentelemetry module",
+          "description": "Initialize new Maven module with proper dependencies",
+          "context": "Module should have OpenTelemetry SDK dependencies and be optional"
+        },
+        {
+          "step_number": 2,
+          "action": "Implement OpenTelemetryAiServiceListener",
+          "description": "Create listener that implements AiServiceListener interface",
+          "context": "Should register automatically via SPI mechanism"
+        },
+        {
+          "step_number": 3,
+          "action": "Test auto-configuration",
+          "description": "Verify listener is auto-discovered when module is on classpath",
+          "context": "Uses ServiceLoader SPI pattern"
+        }
+      ],
+      "test_cases": [
+        {
+          "id": 1,
+          "input": "Add langchain4j-opentelemetry dependency to classpath",
+          "expected": "OpenTelemetry listeners are automatically registered",
+          "type": "unit"
+        },
+        {
+          "id": 2,
+          "input": "Set OTEL_SERVICE_NAME environment variable",
+          "expected": "OpenTelemetry SDK respects configuration",
+          "type": "integration"
+        }
+      ],
+      "expected": {
+        "success": ["Module loads without errors", "Listeners register via SPI"],
+        "failures": ["ClassNotFoundException for OpenTelemetry classes", "SPI registration fails"],
+        "performance": ["Module initialization <100ms"]
+      },
+      "implementation": {
+        "files": [
+          {
+            "file_path": "langchain4j-opentelemetry/pom.xml",
+            "snippets": [
+              {
+                "start_line": 1,
+                "end_line": 50,
+                "code": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<project xmlns=\"http://maven.apache.org/POM/4.0.0\">\n  <artifactId>langchain4j-opentelemetry</artifactId>\n  <dependencies>\n    <dependency>\n      <groupId>io.opentelemetry</groupId>\n      <artifactId>opentelemetry-sdk</artifactId>\n      <version>1.32.0</version>\n    </dependency>\n  </dependencies>\n</project>",
+                "purpose": "Maven module configuration for OpenTelemetry integration"
+              }
+            ]
+          }
+        ],
+        "notes": "Module structure not yet implemented"
+      },
+      "expectation": "OpenTelemetry module should initialize and auto-register listeners without breaking existing functionality",
+      "prediction": "Module does not exist yet, tests will fail with ClassNotFoundException",
+      "explanation": [
+        "langchain4j-opentelemetry module needs to be created",
+        "Maven dependencies for OpenTelemetry SDK must be added",
+        "SPI registration file must be created in META-INF/services"
+      ],
+      "status": "fail"
+    },
+    {
+      "id": 2,
+      "name": "AiService Tracing Integration",
+      "description": "Test that AiService invocations create proper OpenTelemetry spans with hierarchical structure",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Configure OpenTelemetry tracer",
+          "description": "Set up in-memory span exporter for testing",
+          "context": "Use TestSpanProcessor to capture spans"
+        },
+        {
+          "step_number": 2,
+          "action": "Invoke AiService method",
+          "description": "Call AiService with configured OpenTelemetry listener",
+          "context": "Should create root span for AiService invocation"
+        },
+        {
+          "step_number": 3,
+          "action": "Verify span structure",
+          "description": "Check that spans follow expected hierarchy",
+          "context": "Root span -> LLM span -> Tool spans (if any)"
+        }
+      ],
+      "test_cases": [
+        {
+          "id": 1,
+          "input": "AiService.invoke() with simple prompt",
+          "expected": "Root span created with 'aiservice.invoke' operation name",
+          "type": "integration"
+        },
+        {
+          "id": 2,
+          "input": "AiService with tool execution",
+          "expected": "Child spans created for each tool execution",
+          "type": "integration"
+        },
+        {
+          "id": 3,
+          "input": "AiService with input/output guardrails",
+          "expected": "Spans created for guardrail validations",
+          "type": "integration"
+        }
+      ],
+      "expected": {
+        "success": ["Root span per invocation", "Proper parent-child relationships", "GenAI semantic conventions"],
+        "failures": ["No spans created", "Incorrect span hierarchy", "Missing attributes"],
+        "performance": ["Span overhead <1ms per operation"]
+      },
+      "implementation": {
+        "files": [
+          {
+            "file_path": "langchain4j-opentelemetry/src/main/java/dev/langchain4j/opentelemetry/OpenTelemetryAiServiceListener.java",
+            "snippets": [
+              {
+                "start_line": 1,
+                "end_line": 30,
+                "code": "public class OpenTelemetryAiServiceListener implements AiServiceStartedListener, AiServiceCompletedListener {\n  private final Tracer tracer;\n  \n  @Override\n  public void onAiServiceStarted(AiServiceStartedEvent event) {\n    Span span = tracer.spanBuilder(\"aiservice.invoke\")\n      .setSpanKind(SpanKind.SERVER)\n      .startSpan();\n    // Store span in context\n  }\n}",
+                "purpose": "OpenTelemetry integration for AiService events"
+              }
+            ]
+          }
+        ],
+        "notes": "OpenTelemetryAiServiceListener not yet implemented"
+      },
+      "expectation": "AiService invocations should create structured OpenTelemetry spans with proper parent-child relationships",
+      "prediction": "Tests will fail because OpenTelemetryAiServiceListener class does not exist",
+      "explanation": [
+        "OpenTelemetryAiServiceListener needs to implement multiple listener interfaces",
+        "Span creation and context propagation logic must be implemented",
+        "GenAI semantic convention attributes need to be added to spans"
+      ],
+      "status": "fail"
+    },
+    {
+      "id": 3,
+      "name": "ChatModel Tracing with GenAI Semantic Conventions",
+      "description": "Test that ChatModel interactions create CLIENT spans with GenAI semantic convention attributes",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Set up ChatModel with OpenTelemetry listener",
+          "description": "Configure ChatModelListener implementation",
+          "context": "Should create CLIENT spans for external LLM calls"
+        },
+        {
+          "step_number": 2,
+          "action": "Make ChatModel request",
+          "description": "Call generate() method with test messages",
+          "context": "Should capture request/response attributes"
+        },
+        {
+          "step_number": 3,
+          "action": "Validate GenAI attributes",
+          "description": "Check span has required GenAI semantic convention attributes",
+          "context": "gen_ai.system, gen_ai.request.model, etc."
+        }
+      ],
+      "test_cases": [
+        {
+          "id": 1,
+          "input": "ChatModel.generate() with OpenAI model",
+          "expected": "CLIENT span with gen_ai.system='openai' attribute",
+          "type": "integration"
+        },
+        {
+          "id": 2,
+          "input": "ChatModel request with temperature=0.7",
+          "expected": "Span includes gen_ai.request.temperature=0.7",
+          "type": "unit"
+        },
+        {
+          "id": 3,
+          "input": "ChatModel response with token usage",
+          "expected": "Span includes gen_ai.usage.input_tokens and output_tokens",
+          "type": "integration"
+        }
+      ],
+      "expected": {
+        "success": ["CLIENT span kind", "All required GenAI attributes", "Token usage captured"],
+        "failures": ["Missing span attributes", "Wrong span kind", "No token metrics"],
+        "performance": ["Attribute capture <0.5ms overhead"]
+      },
+      "implementation": {
+        "files": [
+          {
+            "file_path": "langchain4j-opentelemetry/src/main/java/dev/langchain4j/opentelemetry/OpenTelemetryChatModelListener.java",
+            "snippets": [
+              {
+                "start_line": 1,
+                "end_line": 40,
+                "code": "public class OpenTelemetryChatModelListener implements ChatModelListener {\n  private final Tracer tracer;\n  \n  @Override\n  public void onRequest(ChatModelRequestContext context) {\n    Span span = tracer.spanBuilder(\"chat_model.generate\")\n      .setSpanKind(SpanKind.CLIENT)\n      .setAttribute(\"gen_ai.system\", extractProvider(context))\n      .setAttribute(\"gen_ai.request.model\", context.request().modelName())\n      .startSpan();\n  }\n}",
+                "purpose": "OpenTelemetry integration for ChatModel events with GenAI conventions"
+              }
+            ]
+          }
+        ],
+        "notes": "OpenTelemetryChatModelListener not yet implemented"
+      },
+      "expectation": "ChatModel operations should create CLIENT spans with comprehensive GenAI semantic convention attributes",
+      "prediction": "Tests will fail because OpenTelemetryChatModelListener does not exist and GenAI attribute extraction is not implemented",
+      "explanation": [
+        "OpenTelemetryChatModelListener needs to implement ChatModelListener interface",
+        "GenAI semantic convention attribute mapping logic must be implemented",
+        "Token usage and model parameter extraction needs to be built"
+      ],
+      "status": "fail"
+    },
+    {
+      "id": 4,
+      "name": "Metrics Collection and Export",
+      "description": "Test that OpenTelemetry metrics are collected for request counts, latency, and token usage",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Configure metrics collection",
+          "description": "Set up OpenTelemetry MeterProvider with in-memory exporter",
+          "context": "Should capture counter and histogram metrics"
+        },
+        {
+          "step_number": 2,
+          "action": "Execute multiple AI operations",
+          "description": "Run several AiService calls with different models",
+          "context": "Should increment counters and record latency"
+        },
+        {
+          "step_number": 3,
+          "action": "Verify metrics data",
+          "description": "Check that metrics are properly aggregated and tagged",
+          "context": "Metrics should include model provider and error status tags"
+        }
+      ],
+      "test_cases": [
+        {
+          "id": 1,
+          "input": "10 successful AiService calls",
+          "expected": "langchain4j.aiservice.requests counter shows 10",
+          "type": "integration"
+        },
+        {
+          "id": 2,
+          "input": "AiService call with 500ms latency",
+          "expected": "langchain4j.aiservice.duration histogram records 500ms",
+          "type": "integration"
+        },
+        {
+          "id": 3,
+          "input": "ChatModel response with 100 input tokens",
+          "expected": "langchain4j.tokens.input counter increments by 100",
+          "type": "unit"
+        }
+      ],
+      "expected": {
+        "success": ["Request counters increment", "Latency histograms populated", "Token usage tracked"],
+        "failures": ["Missing metrics", "Incorrect metric values", "Tags not applied"],
+        "performance": ["Metrics collection <0.1ms overhead"]
+      },
+      "implementation": {
+        "files": [
+          {
+            "file_path": "langchain4j-opentelemetry/src/main/java/dev/langchain4j/opentelemetry/OpenTelemetryMetricsCollector.java",
+            "snippets": [
+              {
+                "start_line": 1,
+                "end_line": 35,
+                "code": "public class OpenTelemetryMetricsCollector {\n  private final LongCounter requestCounter;\n  private final DoubleHistogram durationHistogram;\n  private final LongCounter tokenCounter;\n  \n  public OpenTelemetryMetricsCollector(Meter meter) {\n    this.requestCounter = meter.counterBuilder(\"langchain4j.aiservice.requests\")\n      .setDescription(\"Number of AiService requests\")\n      .build();\n  }\n  \n  public void recordRequest(String provider, String model) {\n    requestCounter.add(1, \n      Attributes.of(AttributeKey.stringKey(\"provider\"), provider,\n                   AttributeKey.stringKey(\"model\"), model));\n  }\n}",
+                "purpose": "Metrics collection for AI operations"
+              }
+            ]
+          }
+        ],
+        "notes": "Metrics collection implementation not yet created"
+      },
+      "expectation": "AI operations should generate comprehensive metrics including request counts, latency distributions, and token usage statistics",
+      "prediction": "Tests will fail because OpenTelemetryMetricsCollector class does not exist and metric instruments are not defined",
+      "explanation": [
+        "OpenTelemetryMetricsCollector class needs to be implemented with proper metric instruments",
+        "Metric collection logic must be integrated with existing listeners",
+        "Proper tagging strategy for metrics dimensions needs to be implemented"
+      ],
+      "status": "fail"
+    },
+    {
+      "id": 5,
+      "name": "Privacy and Content Redaction",
+      "description": "Test that sensitive content is redacted by default with opt-in content capture",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Configure default privacy settings",
+          "description": "Ensure content redaction is enabled by default",
+          "context": "Spans should not contain message content by default"
+        },
+        {
+          "step_number": 2,
+          "action": "Test with sensitive data",
+          "description": "Send AI request with PII-like content",
+          "context": "Span attributes should show redacted content"
+        },
+        {
+          "step_number": 3,
+          "action": "Enable content capture",
+          "description": "Configure opt-in content capture with truncation",
+          "context": "Should capture limited content when explicitly enabled"
+        }
+      ],
+      "test_cases": [
+        {
+          "id": 1,
+          "input": "AiService request with default config",
+          "expected": "gen_ai.prompt attribute is not present or shows '[REDACTED]'",
+          "type": "unit"
+        },
+        {
+          "id": 2,
+          "input": "Enable content capture with max_length=100",
+          "expected": "gen_ai.prompt shows truncated content up to 100 chars",
+          "type": "unit"
+        },
+        {
+          "id": 3,
+          "input": "ChatModel response with content capture disabled",
+          "expected": "gen_ai.completion attribute not present",
+          "type": "unit"
+        }
+      ],
+      "expected": {
+        "success": ["Default redaction works", "Opt-in capture works", "Truncation applied"],
+        "failures": ["Content leaked by default", "Truncation not working", "Config ignored"],
+        "performance": ["Content processing <0.2ms overhead"]
+      },
+      "implementation": {
+        "files": [
+          {
+            "file_path": "langchain4j-opentelemetry/src/main/java/dev/langchain4j/opentelemetry/ContentRedactionConfig.java",
+            "snippets": [
+              {
+                "start_line": 1,
+                "end_line": 25,
+                "code": "public class ContentRedactionConfig {\n  private boolean contentCaptureEnabled = false;\n  private int maxContentLength = 1024;\n  \n  public String redactContent(String content) {\n    if (!contentCaptureEnabled) {\n      return \"[REDACTED]\";\n    }\n    if (content.length() > maxContentLength) {\n      return content.substring(0, maxContentLength) + \"...\";\n    }\n    return content;\n  }\n}",
+                "purpose": "Configuration for content redaction and privacy controls"
+              }
+            ]
+          }
+        ],
+        "notes": "Content redaction logic not yet implemented"
+      },
+      "expectation": "Content should be redacted by default for privacy, with configurable opt-in content capture including truncation limits",
+      "prediction": "Tests will fail because ContentRedactionConfig class does not exist and redaction logic is not implemented",
+      "explanation": [
+        "ContentRedactionConfig class needs to be created with privacy-first defaults",
+        "Content redaction logic must be integrated into span attribute setting",
+        "Configuration system for enabling/disabling content capture needs to be built"
+      ],
+      "status": "fail"
+    },
+    {
+      "id": 6,
+      "name": "Spring Boot Auto-Configuration",
+      "description": "Test that OpenTelemetry integration works seamlessly with Spring Boot auto-configuration",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Create Spring Boot starter",
+          "description": "Build langchain4j-opentelemetry-spring-boot-starter module",
+          "context": "Should provide auto-configuration classes"
+        },
+        {
+          "step_number": 2,
+          "action": "Test auto-configuration",
+          "description": "Verify beans are created automatically",
+          "context": "Should detect existing OTel configuration"
+        },
+        {
+          "step_number": 3,
+          "action": "Test property binding",
+          "description": "Verify application.yml properties are respected",
+          "context": "Should support langchain4j.opentelemetry.* properties"
+        }
+      ],
+      "test_cases": [
+        {
+          "id": 1,
+          "input": "Spring Boot app with langchain4j-opentelemetry-spring-boot-starter",
+          "expected": "OpenTelemetry listeners auto-registered as beans",
+          "type": "integration"
+        },
+        {
+          "id": 2,
+          "input": "application.yml with langchain4j.opentelemetry.content-capture.enabled=true",
+          "expected": "ContentRedactionConfig bean configured with enabled=true",
+          "type": "integration"
+        },
+        {
+          "id": 3,
+          "input": "Existing OpenTelemetry configuration in Spring Boot",
+          "expected": "LangChain4j reuses existing OTel beans",
+          "type": "integration"
+        }
+      ],
+      "expected": {
+        "success": ["Auto-configuration works", "Properties binding works", "Existing OTel reused"],
+        "failures": ["Beans not created", "Properties ignored", "Configuration conflicts"],
+        "performance": ["Auto-configuration <200ms"]
+      },
+      "implementation": {
+        "files": [
+          {
+            "file_path": "langchain4j-opentelemetry-spring-boot-starter/src/main/java/dev/langchain4j/opentelemetry/spring/OpenTelemetryAutoConfiguration.java",
+            "snippets": [
+              {
+                "start_line": 1,
+                "end_line": 30,
+                "code": "@Configuration\n@ConditionalOnClass(OpenTelemetry.class)\n@EnableConfigurationProperties(OpenTelemetryProperties.class)\npublic class OpenTelemetryAutoConfiguration {\n  \n  @Bean\n  @ConditionalOnMissingBean\n  public OpenTelemetryAiServiceListener openTelemetryAiServiceListener(OpenTelemetry openTelemetry) {\n    return new OpenTelemetryAiServiceListener(openTelemetry.getTracer(\"langchain4j\"));\n  }\n}",
+                "purpose": "Spring Boot auto-configuration for OpenTelemetry integration"
+              }
+            ]
+          }
+        ],
+        "notes": "Spring Boot starter module and auto-configuration not yet implemented"
+      },
+      "expectation": "Spring Boot applications should automatically configure OpenTelemetry integration when starter is added to classpath",
+      "prediction": "Tests will fail because Spring Boot starter module does not exist and auto-configuration classes are not implemented",
+      "explanation": [
+        "langchain4j-opentelemetry-spring-boot-starter module needs to be created",
+        "OpenTelemetryAutoConfiguration class must be implemented with proper conditional logic",
+        "OpenTelemetryProperties configuration class needs to be built for property binding"
+      ],
+      "status": "fail"
+    },
+    {
+      "id": 7,
+      "name": "MCP Server Telemetry Management",
+      "description": "Test MCP server wrapper for controlling telemetry and accessing trace data",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Implement MCP telemetry server",
+          "description": "Create MCP server that wraps existing MCP functionality",
+          "context": "Should provide telemetry control endpoints"
+        },
+        {
+          "step_number": 2,
+          "action": "Test telemetry toggle",
+          "description": "Verify ability to enable/disable telemetry at runtime",
+          "context": "Should not require application restart"
+        },
+        {
+          "step_number": 3,
+          "action": "Test trace data retrieval",
+          "description": "Verify ability to fetch recent traces and metrics",
+          "context": "Should provide JSON formatted data"
+        }
+      ],
+      "test_cases": [
+        {
+          "id": 1,
+          "input": "MCP request to toggle telemetry off",
+          "expected": "Subsequent AI operations do not create spans",
+          "type": "integration"
+        },
+        {
+          "id": 2,
+          "input": "MCP request to get recent traces",
+          "expected": "Returns JSON array of recent span data",
+          "type": "integration"
+        },
+        {
+          "id": 3,
+          "input": "MCP request to get metrics summary",
+          "expected": "Returns aggregated metrics data",
+          "type": "integration"
+        }
+      ],
+      "expected": {
+        "success": ["Runtime telemetry toggle", "Trace data access", "Metrics access"],
+        "failures": ["Toggle not working", "No trace data", "MCP server errors"],
+        "performance": ["MCP response time <100ms"]
+      },
+      "implementation": {
+        "files": [
+          {
+            "file_path": "langchain4j-opentelemetry/src/main/java/dev/langchain4j/opentelemetry/mcp/TelemetryMcpServer.java",
+            "snippets": [
+              {
+                "start_line": 1,
+                "end_line": 30,
+                "code": "public class TelemetryMcpServer extends BaseMcpServer {\n  private final OpenTelemetryManager telemetryManager;\n  \n  @Override\n  public CompletableFuture<CallToolResult> callTool(CallToolRequest request) {\n    switch (request.name()) {\n      case \"toggle_telemetry\":\n        return handleToggleTelemetry(request);\n      case \"get_traces\":\n        return handleGetTraces(request);\n      default:\n        return super.callTool(request);\n    }\n  }\n}",
+                "purpose": "MCP server wrapper for telemetry management"
+              }
+            ]
+          }
+        ],
+        "notes": "MCP telemetry server not yet implemented"
+      },
+      "expectation": "MCP server should provide runtime control over telemetry settings and access to trace/metrics data",
+      "prediction": "Tests will fail because TelemetryMcpServer class does not exist and MCP integration is not implemented",
+      "explanation": [
+        "TelemetryMcpServer class needs to extend BaseMcpServer with telemetry-specific endpoints",
+        "OpenTelemetryManager for runtime telemetry control needs to be implemented",
+        "Integration with existing MCP infrastructure must be built"
+      ],
+      "status": "fail"
+    },
+    {
+      "id": 8,
+      "name": "Performance and Sampling",
+      "description": "Test that telemetry overhead remains under 5% with proper sampling strategies",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Configure sampling strategy",
+          "description": "Set up head sampling with 10% rate",
+          "context": "Should reduce telemetry overhead in high-volume scenarios"
+        },
+        {
+          "step_number": 2,
+          "action": "Run performance benchmark",
+          "description": "Execute 1000 AI operations with and without telemetry",
+          "context": "Should measure P95 latency difference"
+        },
+        {
+          "step_number": 3,
+          "action": "Verify sampling effectiveness",
+          "description": "Check that only ~10% of operations create spans",
+          "context": "Should maintain statistical representativeness"
+        }
+      ],
+      "test_cases": [
+        {
+          "id": 1,
+          "input": "1000 AiService calls with telemetry disabled",
+          "expected": "Baseline P95 latency recorded",
+          "type": "integration"
+        },
+        {
+          "id": 2,
+          "input": "1000 AiService calls with 10% sampling",
+          "expected": "P95 overhead <5% vs baseline, ~100 spans created",
+          "type": "integration"
+        },
+        {
+          "id": 3,
+          "input": "High-frequency operations (>1000 RPS)",
+          "expected": "Async export prevents blocking, memory usage stable",
+          "type": "integration"
+        }
+      ],
+      "expected": {
+        "success": ["<5% P95 overhead", "Sampling working", "Stable memory usage"],
+        "failures": [">5% overhead", "All requests traced", "Memory leaks"],
+        "performance": ["Target <5% P95 overhead maintained"]
+      },
+      "implementation": {
+        "files": [
+          {
+            "file_path": "langchain4j-opentelemetry/src/main/java/dev/langchain4j/opentelemetry/sampling/LangChain4jSamplingStrategy.java",
+            "snippets": [
+              {
+                "start_line": 1,
+                "end_line": 25,
+                "code": "public class LangChain4jSamplingStrategy implements SamplingStrategy {\n  private final double samplingRate;\n  \n  @Override\n  public SamplingResult shouldSample(Context parentContext, TraceId traceId, String name, SpanKind spanKind, Attributes attributes, List<LinkData> parentLinks) {\n    if (ThreadLocalRandom.current().nextDouble() < samplingRate) {\n      return SamplingResult.create(SamplingDecision.RECORD_AND_SAMPLE);\n    }\n    return SamplingResult.create(SamplingDecision.DROP);\n  }\n}",
+                "purpose": "Custom sampling strategy optimized for LangChain4j workloads"
+              }
+            ]
+          }
+        ],
+        "notes": "Performance optimization and sampling logic not yet implemented"
+      },
+      "expectation": "OpenTelemetry instrumentation should maintain <5% P95 overhead through efficient sampling and async export",
+      "prediction": "Tests will fail because sampling strategy classes do not exist and performance optimization is not implemented",
+      "explanation": [
+        "LangChain4jSamplingStrategy class needs to be implemented with configurable sampling rates",
+        "Performance benchmarking infrastructure must be built for accurate measurements",
+        "Async export configuration and memory management optimizations need to be implemented"
+      ],
+      "status": "fail"
+    }
+  ],
+  "summary": {
+    "total_scenarios": 8,
+    "complexity": "high",
+    "estimated_time": "4-6 hours for full implementation"
+  },
+  "test_mapping": {
+    "scenario_1": ["OpenTelemetryModuleInitializationTest.shouldAutoRegisterOpenTelemetryListenersViaSPI", "OpenTelemetryModuleInitializationTest.shouldCreateOpenTelemetryAiServiceListener", "OpenTelemetryModuleInitializationTest.shouldCreateOpenTelemetryChatModelListener"],
+    "scenario_2": ["OpenTelemetryAiServiceListenerTest.shouldCreateRootSpanOnAiServiceStarted", "OpenTelemetryAiServiceListenerTest.shouldSetProperSpanAttributesOnStarted", "OpenTelemetryAiServiceListenerTest.shouldPropagateContextBetweenSpans"],
+    "scenario_3": ["OpenTelemetryChatModelListenerTest.shouldCreateClientSpanOnChatModelRequest", "OpenTelemetryChatModelListenerTest.shouldSetGenAiSystemAttribute", "OpenTelemetryChatModelListenerTest.shouldCaptureTokenUsageOnResponse"],
+    "scenario_4": ["OpenTelemetryMetricsCollectorTest.shouldIncrementAiServiceRequestCounter", "OpenTelemetryMetricsCollectorTest.shouldRecordAiServiceLatency", "OpenTelemetryMetricsCollectorTest.shouldRecordTokenUsageMetrics"],
+    "scenario_5": ["ContentRedactionConfigTest.shouldRedactContentByDefault", "OpenTelemetryChatModelListenerTest.shouldRedactContentByDefault", "ContentRedactionConfigTest.shouldAllowOptInContentCapture"],
+    "scenario_6": ["Integration tests not implemented - Spring Boot starter module pending"],
+    "scenario_7": ["Integration tests not implemented - MCP telemetry server pending"],
+    "scenario_8": ["OpenTelemetryIntegrationTest.shouldMaintainPerformanceRequirements", "OpenTelemetryIntegrationTest.shouldHandleHighVolumeRequestsWithSampling"]
+  },
+  "test_execution_summary": {
+    "total_test_files": 5,
+    "total_test_methods": 43,
+    "all_tests_failed_as_expected": true,
+    "tdd_red_phase": "All tests designed to fail until implementation is complete",
+    "next_phase": "Implement OpenTelemetry classes to make tests pass (TDD green phase)"
+  }
+}
