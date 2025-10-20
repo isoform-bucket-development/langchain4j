@@ -1,0 +1,1259 @@
+{
+  "project_name": "add opentelemetry",
+  "scenarios": [
+    {
+      "id": 1,
+      "name": "OpenTelemetry Module Creation and Configuration",
+      "description": "Validate that the langchain4j-opentelemetry module is properly structured with correct dependencies, supports SDK autoconfiguration, and respects OTEL_* environment variables",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Create langchain4j-opentelemetry module structure",
+          "description": "Create new Maven module with proper pom.xml, package structure, and OpenTelemetry SDK dependencies",
+          "context": "New opt-in module that doesn't break existing APIs"
+        },
+        {
+          "step_number": 2,
+          "action": "Implement OpenTelemetryConfigurer class",
+          "description": "Create configurer that uses OpenTelemetry SDK Autoconfigure to read OTEL_* environment variables",
+          "context": "Must support both OTel Agent and SDK Autoconfigure modes"
+        },
+        {
+          "step_number": 3,
+          "action": "Configure OTLP exporter as default",
+          "description": "Set up OTLP (gRPC/HTTP) as the default export protocol with proper dependencies",
+          "context": "OTLP-only export, no direct Prometheus export"
+        },
+        {
+          "step_number": 4,
+          "action": "Verify environment variable support",
+          "description": "Test that OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME, and other OTEL_* variables are properly respected",
+          "context": "Standard OpenTelemetry environment variable behavior"
+        }
+      ],
+      "test_cases": [
+        {
+          "id": 1,
+          "input": "Check langchain4j-opentelemetry/pom.xml exists with correct dependencies",
+          "expected": "pom.xml includes opentelemetry-sdk, opentelemetry-sdk-extension-autoconfigure, opentelemetry-exporter-otlp",
+          "type": "integration"
+        },
+        {
+          "id": 2,
+          "input": "Set OTEL_SERVICE_NAME=test-service and initialize OpenTelemetryConfigurer",
+          "expected": "OpenTelemetry SDK is configured with service name 'test-service'",
+          "type": "integration"
+        },
+        {
+          "id": 3,
+          "input": "Set OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317 and verify exporter configuration",
+          "expected": "OTLP exporter points to localhost:4317",
+          "type": "integration"
+        },
+        {
+          "id": 4,
+          "input": "Initialize OpenTelemetry without OTEL_* variables",
+          "expected": "Falls back to default configuration without errors",
+          "type": "unit"
+        }
+      ],
+      "expected": {
+        "success": [
+          "Module compiles successfully with Java 17+",
+          "OpenTelemetry SDK initializes without errors",
+          "Environment variables are properly respected",
+          "OTLP exporter is configured as default"
+        ],
+        "failures": [
+          "Missing required dependencies",
+          "Environment variables not read correctly",
+          "OTLP exporter not properly configured"
+        ],
+        "performance": [
+          "Initialization time < 100ms",
+          "No blocking operations during module load"
+        ]
+      },
+      "implementation": {
+        "files": [
+          {
+            "file_path": "langchain4j-opentelemetry/pom.xml",
+            "snippets": [
+              {
+                "start_line": 1,
+                "end_line": 80,
+                "code": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<project>\n  <dependencies>\n    <dependency>\n      <groupId>io.opentelemetry</groupId>\n      <artifactId>opentelemetry-sdk</artifactId>\n    </dependency>\n    <dependency>\n      <groupId>io.opentelemetry</groupId>\n      <artifactId>opentelemetry-sdk-extension-autoconfigure</artifactId>\n    </dependency>\n    <dependency>\n      <groupId>io.opentelemetry</groupId>\n      <artifactId>opentelemetry-exporter-otlp</artifactId>\n    </dependency>\n  </dependencies>\n</project>",
+                "purpose": "Defines module dependencies for OpenTelemetry SDK and OTLP exporter"
+              }
+            ]
+          },
+          {
+            "file_path": "langchain4j-opentelemetry/src/main/java/dev/langchain4j/opentelemetry/OpenTelemetryConfigurer.java",
+            "snippets": [
+              {
+                "start_line": 1,
+                "end_line": 50,
+                "code": "package dev.langchain4j.opentelemetry;\n\nimport io.opentelemetry.api.OpenTelemetry;\nimport io.opentelemetry.sdk.autoconfigure.AutoConfiguredOpenTelemetrySdk;\n\npublic class OpenTelemetryConfigurer {\n    \n    public static OpenTelemetry configureOpenTelemetry() {\n        // Use SDK Autoconfigure to read OTEL_* environment variables\n        return AutoConfiguredOpenTelemetrySdk.initialize()\n            .getOpenTelemetrySdk();\n    }\n}",
+                "purpose": "Configures OpenTelemetry SDK with autoconfiguration support"
+              }
+            ]
+          }
+        ],
+        "notes": "Module needs to be created from scratch following Maven multi-module conventions"
+      },
+      "expectation": "The langchain4j-opentelemetry module is created with proper structure, dependencies, and configuration support, allowing users to opt-in to OpenTelemetry instrumentation without breaking existing code.",
+      "prediction": "Module structure needs to be created. Configuration class will properly delegate to OpenTelemetry SDK Autoconfigure.",
+      "explanation": [
+        "New Maven module needs to be added to parent pom.xml",
+        "OpenTelemetryConfigurer class needs implementation",
+        "Integration tests needed to verify environment variable support"
+      ],
+      "status": "not_implemented",
+      "design_spec_quote": {
+        "selected_text": "New opt-in module: langchain4j-opentelemetry. Support OTel Agent and SDK Autoconfigure. Default OTLP export. Respect OTEL_* environment variables."
+      }
+    },
+    {
+      "id": 2,
+      "name": "AiService Tracing with Root and Child Spans",
+      "description": "Implement OpenTelemetry tracing for AiService invocations with root span creation and proper context propagation",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Implement OpenTelemetryAiServiceListener",
+          "description": "Create listener that implements AiServiceStartedListener, AiServiceResponseReceivedListener, AiServiceCompletedListener, and AiServiceErrorListener",
+          "context": "Integrates with existing LangChain4j observability API"
+        },
+        {
+          "step_number": 2,
+          "action": "Create root span on AiService invocation",
+          "description": "Start a new root span when AiServiceStartedEvent is received, capturing method name, interface name, and invocation ID",
+          "context": "Root span per AiService invocation as per requirements"
+        },
+        {
+          "step_number": 3,
+          "action": "Propagate OpenTelemetry context",
+          "description": "Store OpenTelemetry context in attributes map for use by child span creators",
+          "context": "Context propagation ensures child spans are properly linked"
+        },
+        {
+          "step_number": 4,
+          "action": "End span on completion or error",
+          "description": "Properly end the root span with OK or ERROR status based on AiServiceCompletedEvent or AiServiceErrorEvent",
+          "context": "Proper span lifecycle management"
+        }
+      ],
+      "test_cases": [
+        {
+          "id": 1,
+          "input": "Create AiService with OpenTelemetryAiServiceListener and invoke a method",
+          "expected": "Root span is created with span name format 'AiService.{interfaceName}.{methodName}'",
+          "type": "integration"
+        },
+        {
+          "id": 2,
+          "input": "Invoke AiService method that completes successfully",
+          "expected": "Span ends with StatusCode.OK and includes invocation ID, method name, and interface name as attributes",
+          "type": "integration"
+        },
+        {
+          "id": 3,
+          "input": "Invoke AiService method that throws an exception",
+          "expected": "Span ends with StatusCode.ERROR and includes exception details",
+          "type": "integration"
+        },
+        {
+          "id": 4,
+          "input": "Invoke AiService with chat memory ID",
+          "expected": "Span includes chat_memory_id attribute",
+          "type": "unit"
+        },
+        {
+          "id": 5,
+          "input": "Multiple concurrent AiService invocations",
+          "expected": "Each invocation creates separate root span with correct context isolation",
+          "type": "integration"
+        }
+      ],
+      "expected": {
+        "success": [
+          "Root span created for each AiService invocation",
+          "Span includes invocation metadata (ID, method, interface)",
+          "Span ends with correct status (OK/ERROR)",
+          "Context is properly propagated to child operations"
+        ],
+        "failures": [
+          "Spans not created",
+          "Context not propagated",
+          "Spans not properly ended",
+          "Missing required attributes"
+        ],
+        "performance": [
+          "Span creation overhead < 1ms",
+          "No blocking operations on span lifecycle",
+          "Async export doesn't block invocation"
+        ]
+      },
+      "implementation": {
+        "files": [
+          {
+            "file_path": "langchain4j-opentelemetry/src/main/java/dev/langchain4j/opentelemetry/OpenTelemetryAiServiceListener.java",
+            "snippets": [
+              {
+                "start_line": 1,
+                "end_line": 90,
+                "code": "package dev.langchain4j.opentelemetry;\n\nimport dev.langchain4j.observability.api.listener.*;\nimport dev.langchain4j.observability.api.event.*;\nimport io.opentelemetry.api.trace.Span;\nimport io.opentelemetry.api.trace.Tracer;\nimport io.opentelemetry.context.Context;\nimport io.opentelemetry.api.trace.StatusCode;\n\npublic class OpenTelemetryAiServiceListener implements \n        AiServiceStartedListener,\n        AiServiceResponseReceivedListener,\n        AiServiceCompletedListener,\n        AiServiceErrorListener {\n    \n    private final Tracer tracer;\n    private static final String SPAN_KEY = \"otel.span\";\n    \n    public OpenTelemetryAiServiceListener(Tracer tracer) {\n        this.tracer = tracer;\n    }\n    \n    @Override\n    public void onEvent(AiServiceStartedEvent event) {\n        String spanName = String.format(\"AiService.%s.%s\",\n            event.invocationContext().interfaceName(),\n            event.invocationContext().methodName());\n        \n        Span span = tracer.spanBuilder(spanName)\n            .setSpanKind(SpanKind.INTERNAL)\n            .startSpan();\n        \n        span.setAttribute(\"invocation.id\", event.invocationContext().invocationId().toString());\n        span.setAttribute(\"ai_service.interface\", event.invocationContext().interfaceName());\n        span.setAttribute(\"ai_service.method\", event.invocationContext().methodName());\n        \n        if (event.invocationContext().chatMemoryId() != null) {\n            span.setAttribute(\"chat_memory_id\", event.invocationContext().chatMemoryId().toString());\n        }\n        \n        // Store span in attributes for child operations\n        event.invocationContext().attributes().put(SPAN_KEY, span);\n    }\n    \n    @Override\n    public void onEvent(AiServiceCompletedEvent event) {\n        Span span = (Span) event.invocationContext().attributes().get(SPAN_KEY);\n        if (span != null) {\n            span.setStatus(StatusCode.OK);\n            span.end();\n        }\n    }\n    \n    @Override\n    public void onEvent(AiServiceErrorEvent event) {\n        Span span = (Span) event.invocationContext().attributes().get(SPAN_KEY);\n        if (span != null) {\n            span.setStatus(StatusCode.ERROR, event.error().getMessage());\n            span.recordException(event.error());\n            span.end();\n        }\n    }\n}",
+                "purpose": "Creates and manages root spans for AiService invocations with proper lifecycle"
+              }
+            ]
+          }
+        ],
+        "notes": "Needs integration with existing LangChain4j observability API. Context propagation is critical for child spans."
+      },
+      "expectation": "Every AiService invocation creates a root span that captures the full lifecycle of the operation, including success and error states, with proper context propagation for child operations.",
+      "prediction": "Implementation will properly integrate with LangChain4j's event-driven observability API and create well-formed OpenTelemetry spans.",
+      "explanation": [
+        "Listener implements multiple event interfaces from LangChain4j observability API",
+        "Context propagation via attributes map enables child span linking",
+        "Proper span lifecycle management ensures complete traces"
+      ],
+      "status": "not_implemented",
+      "design_spec_quote": {
+        "selected_text": "Root span per AiService invocation. Child spans for LLM/tool/guardrail operations. Context propagation."
+      }
+    },
+    {
+      "id": 3,
+      "name": "ChatModel Tracing with GenAI Semantic Conventions",
+      "description": "Implement CLIENT spans for LLM requests following OpenTelemetry GenAI semantic conventions",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Implement OpenTelemetryChatModelListener",
+          "description": "Create ChatModelListener that captures onRequest, onResponse, and onError events",
+          "context": "Uses LangChain4j ChatModelListener API"
+        },
+        {
+          "step_number": 2,
+          "action": "Create CLIENT span on LLM request",
+          "description": "Start CLIENT span with GenAI semantic convention attributes (gen_ai.system, gen_ai.request.model, etc.)",
+          "context": "CLIENT span kind indicates external service call"
+        },
+        {
+          "step_number": 3,
+          "action": "Capture request parameters as span attributes",
+          "description": "Record model name, temperature, top_p, max_tokens, and other parameters following GenAI conventions",
+          "context": "Semantic conventions ensure compatibility with GenAI-aware tools"
+        },
+        {
+          "step_number": 4,
+          "action": "Capture response metadata and token usage",
+          "description": "Record token usage (gen_ai.usage.input_tokens, gen_ai.usage.output_tokens), finish reason, and response ID",
+          "context": "Token usage critical for cost and performance monitoring"
+        },
+        {
+          "step_number": 5,
+          "action": "Implement content redaction by default",
+          "description": "Do NOT capture message content by default; provide opt-in configuration for content capture with truncation",
+          "context": "Privacy requirement: redaction ON by default"
+        }
+      ],
+      "test_cases": [
+        {
+          "id": 1,
+          "input": "Send chat request with OpenTelemetryChatModelListener",
+          "expected": "CLIENT span created with gen_ai.system, gen_ai.request.model, gen_ai.operation.name='chat' attributes",
+          "type": "integration"
+        },
+        {
+          "id": 2,
+          "input": "Chat request with temperature=0.7, max_tokens=100",
+          "expected": "Span includes gen_ai.request.temperature=0.7, gen_ai.request.max_tokens=100",
+          "type": "integration"
+        },
+        {
+          "id": 3,
+          "input": "Successful chat response with token usage",
+          "expected": "Span includes gen_ai.usage.input_tokens, gen_ai.usage.output_tokens, gen_ai.response.finish_reasons",
+          "type": "integration"
+        },
+        {
+          "id": 4,
+          "input": "Chat request with default configuration (redaction ON)",
+          "expected": "Span does NOT include message content in attributes",
+          "type": "unit"
+        },
+        {
+          "id": 5,
+          "input": "Chat request with content capture enabled and 5000 char message",
+          "expected": "Span includes truncated message content (e.g., first 1000 chars)",
+          "type": "integration"
+        },
+        {
+          "id": 6,
+          "input": "Chat request that fails with timeout error",
+          "expected": "Span ends with StatusCode.ERROR and includes error.type attribute",
+          "type": "integration"
+        },
+        {
+          "id": 7,
+          "input": "Chat request with tool specifications",
+          "expected": "Span includes gen_ai.request.tool_count attribute",
+          "type": "integration"
+        }
+      ],
+      "expected": {
+        "success": [
+          "CLIENT spans created for each LLM request",
+          "GenAI semantic conventions properly applied",
+          "Token usage accurately recorded",
+          "Content redacted by default",
+          "Opt-in content capture works with truncation",
+          "Error cases properly handled"
+        ],
+        "failures": [
+          "Missing required GenAI attributes",
+          "Content not redacted by default",
+          "Token usage not captured",
+          "Wrong span kind (not CLIENT)"
+        ],
+        "performance": [
+          "Span creation overhead < 500μs",
+          "Content truncation is efficient",
+          "No impact on LLM request latency"
+        ]
+      },
+      "implementation": {
+        "files": [
+          {
+            "file_path": "langchain4j-opentelemetry/src/main/java/dev/langchain4j/opentelemetry/OpenTelemetryChatModelListener.java",
+            "snippets": [
+              {
+                "start_line": 1,
+                "end_line": 130,
+                "code": "package dev.langchain4j.opentelemetry;\n\nimport dev.langchain4j.model.chat.listener.*;\nimport io.opentelemetry.api.trace.Span;\nimport io.opentelemetry.api.trace.SpanKind;\nimport io.opentelemetry.api.trace.Tracer;\nimport io.opentelemetry.api.trace.StatusCode;\n\npublic class OpenTelemetryChatModelListener implements ChatModelListener {\n    \n    private final Tracer tracer;\n    private final boolean captureContent;\n    private final int contentTruncationLength;\n    private static final String SPAN_KEY = \"otel.chat.span\";\n    \n    public OpenTelemetryChatModelListener(Tracer tracer) {\n        this(tracer, false, 1000);\n    }\n    \n    public OpenTelemetryChatModelListener(Tracer tracer, boolean captureContent, int truncationLength) {\n        this.tracer = tracer;\n        this.captureContent = captureContent;\n        this.contentTruncationLength = truncationLength;\n    }\n    \n    @Override\n    public void onRequest(ChatModelRequestContext ctx) {\n        Span span = tracer.spanBuilder(\"chat \" + ctx.chatRequest().parameters().modelName())\n            .setSpanKind(SpanKind.CLIENT)\n            .startSpan();\n        \n        // GenAI semantic conventions\n        span.setAttribute(\"gen_ai.system\", inferSystem(ctx.modelProvider()));\n        span.setAttribute(\"gen_ai.request.model\", ctx.chatRequest().parameters().modelName());\n        span.setAttribute(\"gen_ai.operation.name\", \"chat\");\n        \n        // Request parameters\n        if (ctx.chatRequest().parameters().temperature() != null) {\n            span.setAttribute(\"gen_ai.request.temperature\", ctx.chatRequest().parameters().temperature());\n        }\n        if (ctx.chatRequest().parameters().topP() != null) {\n            span.setAttribute(\"gen_ai.request.top_p\", ctx.chatRequest().parameters().topP());\n        }\n        if (ctx.chatRequest().parameters().maxOutputTokens() != null) {\n            span.setAttribute(\"gen_ai.request.max_tokens\", ctx.chatRequest().parameters().maxOutputTokens());\n        }\n        \n        // Tool count if tools present\n        if (ctx.chatRequest().parameters().toolSpecifications() != null) {\n            span.setAttribute(\"gen_ai.request.tool_count\", \n                ctx.chatRequest().parameters().toolSpecifications().size());\n        }\n        \n        // Optional content capture (redacted by default)\n        if (captureContent) {\n            String content = extractAndTruncateContent(ctx.chatRequest().messages());\n            span.setAttribute(\"gen_ai.request.content\", content);\n        }\n        \n        ctx.attributes().put(SPAN_KEY, span);\n    }\n    \n    @Override\n    public void onResponse(ChatModelResponseContext ctx) {\n        Span span = (Span) ctx.attributes().get(SPAN_KEY);\n        if (span != null) {\n            // Token usage\n            if (ctx.chatResponse().metadata().tokenUsage() != null) {\n                span.setAttribute(\"gen_ai.usage.input_tokens\", \n                    ctx.chatResponse().metadata().tokenUsage().inputTokenCount());\n                span.setAttribute(\"gen_ai.usage.output_tokens\", \n                    ctx.chatResponse().metadata().tokenUsage().outputTokenCount());\n            }\n            \n            // Response metadata\n            if (ctx.chatResponse().metadata().id() != null) {\n                span.setAttribute(\"gen_ai.response.id\", ctx.chatResponse().metadata().id());\n            }\n            if (ctx.chatResponse().metadata().modelName() != null) {\n                span.setAttribute(\"gen_ai.response.model\", ctx.chatResponse().metadata().modelName());\n            }\n            if (ctx.chatResponse().metadata().finishReason() != null) {\n                span.setAttribute(\"gen_ai.response.finish_reasons\", \n                    ctx.chatResponse().metadata().finishReason().toString());\n            }\n            \n            // Optional content capture\n            if (captureContent && ctx.chatResponse().aiMessage() != null) {\n                String content = truncate(ctx.chatResponse().aiMessage().text(), contentTruncationLength);\n                span.setAttribute(\"gen_ai.response.content\", content);\n            }\n            \n            span.setStatus(StatusCode.OK);\n            span.end();\n        }\n    }\n    \n    @Override\n    public void onError(ChatModelErrorContext ctx) {\n        Span span = (Span) ctx.attributes().get(SPAN_KEY);\n        if (span != null) {\n            span.setStatus(StatusCode.ERROR, ctx.error().getMessage());\n            span.recordException(ctx.error());\n            span.setAttribute(\"error.type\", ctx.error().getClass().getName());\n            span.end();\n        }\n    }\n    \n    private String inferSystem(String modelProvider) {\n        // Map provider to GenAI system name\n        if (modelProvider.contains(\"openai\")) return \"openai\";\n        if (modelProvider.contains(\"anthropic\")) return \"anthropic\";\n        return modelProvider;\n    }\n    \n    private String truncate(String content, int maxLength) {\n        if (content == null || content.length() <= maxLength) return content;\n        return content.substring(0, maxLength) + \"...\";\n    }\n    \n    private String extractAndTruncateContent(List<ChatMessage> messages) {\n        // Extract and truncate message content\n        return \"...\";\n    }\n}",
+                "purpose": "Creates CLIENT spans for LLM calls with GenAI semantic conventions and privacy-first content handling"
+              }
+            ]
+          }
+        ],
+        "notes": "Critical privacy requirement: content must be redacted by default. GenAI semantic conventions ensure compatibility with observability tools like Arize Phoenix."
+      },
+      "expectation": "LLM requests generate CLIENT spans with full GenAI semantic convention attributes, token usage tracking, and privacy-preserving content redaction enabled by default.",
+      "prediction": "Implementation properly follows GenAI semantic conventions and respects privacy requirements with default redaction.",
+      "explanation": [
+        "CLIENT span kind correctly represents external LLM service calls",
+        "GenAI semantic conventions enable compatibility with GenAI-aware observability platforms",
+        "Default redaction protects sensitive data while allowing opt-in content capture",
+        "Token usage tracking enables cost and performance analysis"
+      ],
+      "status": "not_implemented",
+      "design_spec_quote": {
+        "selected_text": "CLIENT spans with GenAI semantic conventions. Redaction ON by default. Opt-in content capture with truncation. Token usage."
+      }
+    },
+    {
+      "id": 4,
+      "name": "Tool Execution Tracing",
+      "description": "Create child spans for tool executions with proper attributes and error handling",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Implement OpenTelemetryToolExecutionListener",
+          "description": "Create listener implementing ToolExecutedListener to capture tool execution events",
+          "context": "Integrates with LangChain4j tool execution observability"
+        },
+        {
+          "step_number": 2,
+          "action": "Create INTERNAL span for tool execution",
+          "description": "Start span with name 'tool.{toolName}' as child of current AiService span",
+          "context": "Tool execution is internal operation, not external service call"
+        },
+        {
+          "step_number": 3,
+          "action": "Capture tool metadata",
+          "description": "Record tool name, input parameters (redacted by default), and execution result",
+          "context": "Tool observability for debugging and performance analysis"
+        },
+        {
+          "step_number": 4,
+          "action": "Handle tool execution errors",
+          "description": "Record exceptions and set span status to ERROR when tool execution fails",
+          "context": "Error visibility for tool failures"
+        }
+      ],
+      "test_cases": [
+        {
+          "id": 1,
+          "input": "Execute tool within AiService invocation",
+          "expected": "INTERNAL span created with name 'tool.{toolName}' as child of AiService span",
+          "type": "integration"
+        },
+        {
+          "id": 2,
+          "input": "Tool execution with input parameters",
+          "expected": "Span includes tool.name attribute, parameters redacted by default",
+          "type": "integration"
+        },
+        {
+          "id": 3,
+          "input": "Tool execution that succeeds",
+          "expected": "Span ends with StatusCode.OK",
+          "type": "unit"
+        },
+        {
+          "id": 4,
+          "input": "Tool execution that throws exception",
+          "expected": "Span records exception and ends with StatusCode.ERROR",
+          "type": "integration"
+        },
+        {
+          "id": 5,
+          "input": "Multiple tool executions in single AiService call",
+          "expected": "Multiple child spans created, all properly linked to parent AiService span",
+          "type": "integration"
+        }
+      ],
+      "expected": {
+        "success": [
+          "Tool spans created as children of AiService spans",
+          "Tool name and metadata captured",
+          "Parameters redacted by default",
+          "Errors properly recorded"
+        ],
+        "failures": [
+          "Spans not linked to parent",
+          "Missing tool metadata",
+          "Parameters not redacted"
+        ],
+        "performance": [
+          "Tool span overhead < 200μs",
+          "No blocking on span creation"
+        ]
+      },
+      "implementation": {
+        "files": [
+          {
+            "file_path": "langchain4j-opentelemetry/src/main/java/dev/langchain4j/opentelemetry/OpenTelemetryToolExecutionListener.java",
+            "snippets": [
+              {
+                "start_line": 1,
+                "end_line": 70,
+                "code": "package dev.langchain4j.opentelemetry;\n\nimport dev.langchain4j.observability.api.listener.ToolExecutedListener;\nimport dev.langchain4j.observability.api.event.ToolExecutedEvent;\nimport io.opentelemetry.api.trace.Span;\nimport io.opentelemetry.api.trace.SpanKind;\nimport io.opentelemetry.api.trace.Tracer;\nimport io.opentelemetry.api.trace.StatusCode;\nimport io.opentelemetry.context.Context;\n\npublic class OpenTelemetryToolExecutionListener implements ToolExecutedListener {\n    \n    private final Tracer tracer;\n    private final boolean captureParameters;\n    \n    public OpenTelemetryToolExecutionListener(Tracer tracer) {\n        this(tracer, false);\n    }\n    \n    public OpenTelemetryToolExecutionListener(Tracer tracer, boolean captureParameters) {\n        this.tracer = tracer;\n        this.captureParameters = captureParameters;\n    }\n    \n    @Override\n    public void onEvent(ToolExecutedEvent event) {\n        // Get parent span from context\n        Span parentSpan = (Span) event.invocationContext().attributes().get(\"otel.span\");\n        Context parentContext = parentSpan != null ? Context.current().with(parentSpan) : Context.current();\n        \n        String spanName = \"tool.\" + event.toolSpecification().name();\n        \n        Span span = tracer.spanBuilder(spanName)\n            .setParent(parentContext)\n            .setSpanKind(SpanKind.INTERNAL)\n            .startSpan();\n        \n        span.setAttribute(\"tool.name\", event.toolSpecification().name());\n        \n        // Optional parameter capture (redacted by default)\n        if (captureParameters && event.toolExecutionRequest() != null) {\n            span.setAttribute(\"tool.arguments\", event.toolExecutionRequest().arguments());\n        }\n        \n        // Record result or error\n        if (event.result() != null) {\n            if (captureParameters) {\n                span.setAttribute(\"tool.result\", String.valueOf(event.result()));\n            }\n            span.setStatus(StatusCode.OK);\n        } else if (event.error() != null) {\n            span.setStatus(StatusCode.ERROR, event.error().getMessage());\n            span.recordException(event.error());\n            span.setAttribute(\"error.type\", event.error().getClass().getName());\n        }\n        \n        span.end();\n    }\n}",
+                "purpose": "Traces tool executions as child spans with privacy-respecting parameter handling"
+              }
+            ]
+          }
+        ],
+        "notes": "Tool spans must be properly linked to parent AiService span. Context propagation is essential."
+      },
+      "expectation": "Tool executions are traced as child spans of AiService invocations, providing visibility into tool usage patterns and performance while respecting privacy by default.",
+      "prediction": "Tool listener will properly create child spans with correct parent linkage through context propagation.",
+      "explanation": [
+        "INTERNAL span kind appropriate for in-process tool execution",
+        "Parent-child relationship enables full trace visualization",
+        "Parameter redaction maintains privacy compliance"
+      ],
+      "status": "not_implemented",
+      "design_spec_quote": {
+        "selected_text": "Child spans for LLM/tool/guardrail operations. Context propagation."
+      }
+    },
+    {
+      "id": 5,
+      "name": "Guardrail Execution Tracing",
+      "description": "Trace input and output guardrail executions with validation results and reprompt tracking",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Implement OpenTelemetryGuardrailListener",
+          "description": "Create listeners for InputGuardrailExecutedListener and OutputGuardrailExecutedListener",
+          "context": "Guardrails are critical security/quality checkpoints to observe"
+        },
+        {
+          "step_number": 2,
+          "action": "Create INTERNAL spans for guardrail execution",
+          "description": "Start span with name 'guardrail.{input|output}.{guardrailName}' as child of AiService span",
+          "context": "Guardrail execution is internal validation operation"
+        },
+        {
+          "step_number": 3,
+          "action": "Capture guardrail result",
+          "description": "Record validation result (success, failure, reprompt), including reason for failure",
+          "context": "Guardrail observability for security and quality monitoring"
+        },
+        {
+          "step_number": 4,
+          "action": "Handle reprompt scenarios",
+          "description": "For output guardrails, track reprompt attempts and link them to original span",
+          "context": "Reprompt tracking shows quality control iterations"
+        }
+      ],
+      "test_cases": [
+        {
+          "id": 1,
+          "input": "Execute input guardrail that passes validation",
+          "expected": "INTERNAL span created with guardrail.result=success, StatusCode.OK",
+          "type": "integration"
+        },
+        {
+          "id": 2,
+          "input": "Execute input guardrail that blocks request",
+          "expected": "Span includes guardrail.result=blocked, guardrail.reason, StatusCode.ERROR",
+          "type": "integration"
+        },
+        {
+          "id": 3,
+          "input": "Execute output guardrail that triggers reprompt",
+          "expected": "Span includes guardrail.result=reprompt, guardrail.reprompt_count",
+          "type": "integration"
+        },
+        {
+          "id": 4,
+          "input": "Chain of multiple input guardrails",
+          "expected": "Multiple child spans, each representing one guardrail in the chain",
+          "type": "integration"
+        },
+        {
+          "id": 5,
+          "input": "Guardrail that throws exception",
+          "expected": "Span records exception and ends with StatusCode.ERROR",
+          "type": "unit"
+        }
+      ],
+      "expected": {
+        "success": [
+          "Guardrail spans created as children of AiService spans",
+          "Validation results properly captured",
+          "Failure reasons recorded",
+          "Reprompt attempts tracked",
+          "Errors properly handled"
+        ],
+        "failures": [
+          "Spans not created",
+          "Missing validation results",
+          "Parent-child linkage broken"
+        ],
+        "performance": [
+          "Guardrail span overhead < 200μs",
+          "No impact on guardrail execution time"
+        ]
+      },
+      "implementation": {
+        "files": [
+          {
+            "file_path": "langchain4j-opentelemetry/src/main/java/dev/langchain4j/opentelemetry/OpenTelemetryGuardrailListener.java",
+            "snippets": [
+              {
+                "start_line": 1,
+                "end_line": 90,
+                "code": "package dev.langchain4j.opentelemetry;\n\nimport dev.langchain4j.observability.api.listener.*;\nimport dev.langchain4j.observability.api.event.*;\nimport io.opentelemetry.api.trace.Span;\nimport io.opentelemetry.api.trace.SpanKind;\nimport io.opentelemetry.api.trace.Tracer;\nimport io.opentelemetry.api.trace.StatusCode;\nimport io.opentelemetry.context.Context;\n\npublic class OpenTelemetryGuardrailListener implements \n        InputGuardrailExecutedListener,\n        OutputGuardrailExecutedListener {\n    \n    private final Tracer tracer;\n    \n    public OpenTelemetryGuardrailListener(Tracer tracer) {\n        this.tracer = tracer;\n    }\n    \n    @Override\n    public void onEvent(InputGuardrailExecutedEvent event) {\n        Span parentSpan = (Span) event.invocationContext().attributes().get(\"otel.span\");\n        Context parentContext = parentSpan != null ? Context.current().with(parentSpan) : Context.current();\n        \n        String spanName = \"guardrail.input.\" + event.guardrailName();\n        \n        Span span = tracer.spanBuilder(spanName)\n            .setParent(parentContext)\n            .setSpanKind(SpanKind.INTERNAL)\n            .startSpan();\n        \n        span.setAttribute(\"guardrail.name\", event.guardrailName());\n        span.setAttribute(\"guardrail.type\", \"input\");\n        \n        if (event.result().isSuccess()) {\n            span.setAttribute(\"guardrail.result\", \"success\");\n            span.setStatus(StatusCode.OK);\n        } else {\n            span.setAttribute(\"guardrail.result\", \"blocked\");\n            if (event.result().reason() != null) {\n                span.setAttribute(\"guardrail.reason\", event.result().reason());\n            }\n            span.setStatus(StatusCode.ERROR, \"Input blocked by guardrail\");\n        }\n        \n        span.end();\n    }\n    \n    @Override\n    public void onEvent(OutputGuardrailExecutedEvent event) {\n        Span parentSpan = (Span) event.invocationContext().attributes().get(\"otel.span\");\n        Context parentContext = parentSpan != null ? Context.current().with(parentSpan) : Context.current();\n        \n        String spanName = \"guardrail.output.\" + event.guardrailName();\n        \n        Span span = tracer.spanBuilder(spanName)\n            .setParent(parentContext)\n            .setSpanKind(SpanKind.INTERNAL)\n            .startSpan();\n        \n        span.setAttribute(\"guardrail.name\", event.guardrailName());\n        span.setAttribute(\"guardrail.type\", \"output\");\n        \n        if (event.result().isSuccess()) {\n            span.setAttribute(\"guardrail.result\", \"success\");\n            span.setStatus(StatusCode.OK);\n        } else if (event.result().isReprompt()) {\n            span.setAttribute(\"guardrail.result\", \"reprompt\");\n            span.setAttribute(\"guardrail.reprompt_count\", event.result().repromptAttempt());\n            span.setStatus(StatusCode.OK);\n        } else {\n            span.setAttribute(\"guardrail.result\", \"failed\");\n            if (event.result().reason() != null) {\n                span.setAttribute(\"guardrail.reason\", event.result().reason());\n            }\n            span.setStatus(StatusCode.ERROR, \"Output validation failed\");\n        }\n        \n        span.end();\n    }\n}",
+                "purpose": "Traces guardrail validations with detailed result information for security and quality monitoring"
+              }
+            ]
+          }
+        ],
+        "notes": "Guardrail tracing is critical for understanding security and quality control effectiveness."
+      },
+      "expectation": "Input and output guardrail executions are fully traced, showing validation results, blocking decisions, and reprompt iterations for complete visibility into security and quality controls.",
+      "prediction": "Guardrail listener will create detailed spans capturing all validation outcomes including success, failure, and reprompt scenarios.",
+      "explanation": [
+        "Separate spans for input and output guardrails enable distinct monitoring",
+        "Validation result tracking helps identify problematic inputs/outputs",
+        "Reprompt tracking shows quality control iteration effectiveness"
+      ],
+      "status": "not_implemented",
+      "design_spec_quote": {
+        "selected_text": "Child spans for LLM/tool/guardrail operations."
+      }
+    },
+    {
+      "id": 6,
+      "name": "Metrics Collection - Request Count and Latency",
+      "description": "Implement metrics recorder for request count, latency histograms, and operation tracking",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Implement OpenTelemetryMetricsRecorder",
+          "description": "Create class that uses OpenTelemetry Meter to record metrics",
+          "context": "Metrics complement tracing with aggregate statistics"
+        },
+        {
+          "step_number": 2,
+          "action": "Record request count metric",
+          "description": "Create Counter for 'langchain4j.aiservice.requests' with dimensions (interface, method, status)",
+          "context": "Request counting for traffic analysis"
+        },
+        {
+          "step_number": 3,
+          "action": "Record latency histogram",
+          "description": "Create Histogram for 'langchain4j.aiservice.duration' to track invocation latency in milliseconds",
+          "context": "Latency tracking for performance monitoring"
+        },
+        {
+          "step_number": 4,
+          "action": "Integrate with listeners",
+          "description": "Update listeners to call metrics recorder on completion/error events",
+          "context": "Metrics recorded alongside traces"
+        }
+      ],
+      "test_cases": [
+        {
+          "id": 1,
+          "input": "Complete AiService invocation successfully",
+          "expected": "Counter 'langchain4j.aiservice.requests' increments with status=success",
+          "type": "integration"
+        },
+        {
+          "id": 2,
+          "input": "Complete AiService invocation with error",
+          "expected": "Counter increments with status=error",
+          "type": "integration"
+        },
+        {
+          "id": 3,
+          "input": "AiService invocation taking 150ms",
+          "expected": "Histogram 'langchain4j.aiservice.duration' records value ~150ms",
+          "type": "integration"
+        },
+        {
+          "id": 4,
+          "input": "Multiple invocations of same method",
+          "expected": "Counter aggregates with correct dimensions (interface, method)",
+          "type": "integration"
+        },
+        {
+          "id": 5,
+          "input": "Verify metrics export",
+          "expected": "Metrics exported via OTLP to configured endpoint",
+          "type": "integration"
+        }
+      ],
+      "expected": {
+        "success": [
+          "Request counters accurately track invocations",
+          "Latency histograms capture duration distribution",
+          "Metrics exported via OTLP",
+          "Proper dimensions for aggregation"
+        ],
+        "failures": [
+          "Metrics not recorded",
+          "Incorrect metric values",
+          "Missing dimensions"
+        ],
+        "performance": [
+          "Metrics recording overhead < 100μs per operation",
+          "Async export doesn't block application"
+        ]
+      },
+      "implementation": {
+        "files": [
+          {
+            "file_path": "langchain4j-opentelemetry/src/main/java/dev/langchain4j/opentelemetry/OpenTelemetryMetricsRecorder.java",
+            "snippets": [
+              {
+                "start_line": 1,
+                "end_line": 80,
+                "code": "package dev.langchain4j.opentelemetry;\n\nimport io.opentelemetry.api.metrics.Meter;\nimport io.opentelemetry.api.metrics.LongCounter;\nimport io.opentelemetry.api.metrics.DoubleHistogram;\nimport io.opentelemetry.api.common.Attributes;\nimport io.opentelemetry.api.common.AttributeKey;\n\npublic class OpenTelemetryMetricsRecorder {\n    \n    private final LongCounter requestCounter;\n    private final DoubleHistogram durationHistogram;\n    private final LongCounter llmRequestCounter;\n    private final DoubleHistogram llmDurationHistogram;\n    \n    private static final AttributeKey<String> INTERFACE_KEY = AttributeKey.stringKey(\"ai_service.interface\");\n    private static final AttributeKey<String> METHOD_KEY = AttributeKey.stringKey(\"ai_service.method\");\n    private static final AttributeKey<String> STATUS_KEY = AttributeKey.stringKey(\"status\");\n    private static final AttributeKey<String> MODEL_KEY = AttributeKey.stringKey(\"gen_ai.request.model\");\n    \n    public OpenTelemetryMetricsRecorder(Meter meter) {\n        this.requestCounter = meter.counterBuilder(\"langchain4j.aiservice.requests\")\n            .setDescription(\"Number of AI service invocations\")\n            .setUnit(\"1\")\n            .build();\n        \n        this.durationHistogram = meter.histogramBuilder(\"langchain4j.aiservice.duration\")\n            .setDescription(\"Duration of AI service invocations\")\n            .setUnit(\"ms\")\n            .build();\n        \n        this.llmRequestCounter = meter.counterBuilder(\"langchain4j.llm.requests\")\n            .setDescription(\"Number of LLM requests\")\n            .setUnit(\"1\")\n            .build();\n        \n        this.llmDurationHistogram = meter.histogramBuilder(\"langchain4j.llm.duration\")\n            .setDescription(\"Duration of LLM requests\")\n            .setUnit(\"ms\")\n            .build();\n    }\n    \n    public void recordAiServiceRequest(String interfaceName, String methodName, String status, long durationMs) {\n        Attributes attributes = Attributes.builder()\n            .put(INTERFACE_KEY, interfaceName)\n            .put(METHOD_KEY, methodName)\n            .put(STATUS_KEY, status)\n            .build();\n        \n        requestCounter.add(1, attributes);\n        durationHistogram.record(durationMs, attributes);\n    }\n    \n    public void recordLlmRequest(String model, String status, long durationMs) {\n        Attributes attributes = Attributes.builder()\n            .put(MODEL_KEY, model)\n            .put(STATUS_KEY, status)\n            .build();\n        \n        llmRequestCounter.add(1, attributes);\n        llmDurationHistogram.record(durationMs, attributes);\n    }\n}",
+                "purpose": "Records key metrics for request counting and latency tracking with proper dimensions"
+              }
+            ]
+          }
+        ],
+        "notes": "Metrics provide aggregate view complementing detailed traces. Async export is critical for performance."
+      },
+      "expectation": "Request counts and latency distributions are accurately recorded and exported via OTLP, enabling aggregate performance analysis and alerting.",
+      "prediction": "Metrics recorder will efficiently capture operation statistics with minimal overhead using OpenTelemetry SDK's optimized metric collection.",
+      "explanation": [
+        "Counters track request volume by operation and status",
+        "Histograms enable percentile calculation (P50, P95, P99)",
+        "Proper dimensions enable useful aggregation and filtering"
+      ],
+      "status": "not_implemented",
+      "design_spec_quote": {
+        "selected_text": "Request count. Latency histograms. Error rate. Retries. Token usage."
+      }
+    },
+    {
+      "id": 7,
+      "name": "Metrics Collection - Token Usage and Error Rates",
+      "description": "Track token consumption and error rates for cost and reliability monitoring",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Add token usage counter",
+          "description": "Create Counter for 'langchain4j.llm.tokens' with dimensions (model, token_type: input/output)",
+          "context": "Token tracking critical for cost management"
+        },
+        {
+          "step_number": 2,
+          "action": "Record input and output tokens",
+          "description": "Extract token usage from ChatResponse metadata and record separately for input/output",
+          "context": "Separate tracking enables cost attribution"
+        },
+        {
+          "step_number": 3,
+          "action": "Track error rate",
+          "description": "Use request counter with status dimension to calculate error rate",
+          "context": "Error rate from existing counter with status=error"
+        },
+        {
+          "step_number": 4,
+          "action": "Track retry count",
+          "description": "Add Counter for 'langchain4j.llm.retries' to track retry attempts",
+          "context": "Retry tracking for reliability analysis"
+        }
+      ],
+      "test_cases": [
+        {
+          "id": 1,
+          "input": "Chat response with 100 input tokens and 50 output tokens",
+          "expected": "Counter 'langchain4j.llm.tokens' increments by 100 (token_type=input) and 50 (token_type=output)",
+          "type": "integration"
+        },
+        {
+          "id": 2,
+          "input": "Request that fails and triggers retry",
+          "expected": "Counter 'langchain4j.llm.retries' increments by 1",
+          "type": "integration"
+        },
+        {
+          "id": 3,
+          "input": "10 successful requests and 2 failed requests",
+          "expected": "Error rate = 2/12 = 16.67% calculable from status dimension",
+          "type": "integration"
+        },
+        {
+          "id": 4,
+          "input": "Multiple models used in same session",
+          "expected": "Token counters properly segregated by model dimension",
+          "type": "integration"
+        }
+      ],
+      "expected": {
+        "success": [
+          "Token usage accurately tracked by type (input/output)",
+          "Token counts segregated by model",
+          "Error rate calculable from request counters",
+          "Retry attempts tracked"
+        ],
+        "failures": [
+          "Token counts missing or incorrect",
+          "Model dimension not captured",
+          "Retries not tracked"
+        ],
+        "performance": [
+          "Token extraction overhead < 50μs",
+          "No blocking on metrics recording"
+        ]
+      },
+      "implementation": {
+        "files": [
+          {
+            "file_path": "langchain4j-opentelemetry/src/main/java/dev/langchain4j/opentelemetry/OpenTelemetryMetricsRecorder.java",
+            "snippets": [
+              {
+                "start_line": 80,
+                "end_line": 130,
+                "code": "    private final LongCounter tokenCounter;\n    private final LongCounter retryCounter;\n    \n    private static final AttributeKey<String> TOKEN_TYPE_KEY = AttributeKey.stringKey(\"token_type\");\n    private static final AttributeKey<String> ERROR_TYPE_KEY = AttributeKey.stringKey(\"error.type\");\n    \n    // In constructor:\n    this.tokenCounter = meter.counterBuilder(\"langchain4j.llm.tokens\")\n        .setDescription(\"Number of tokens consumed by LLM requests\")\n        .setUnit(\"1\")\n        .build();\n    \n    this.retryCounter = meter.counterBuilder(\"langchain4j.llm.retries\")\n        .setDescription(\"Number of LLM request retries\")\n        .setUnit(\"1\")\n        .build();\n    \n    public void recordTokenUsage(String model, int inputTokens, int outputTokens) {\n        if (inputTokens > 0) {\n            Attributes inputAttrs = Attributes.builder()\n                .put(MODEL_KEY, model)\n                .put(TOKEN_TYPE_KEY, \"input\")\n                .build();\n            tokenCounter.add(inputTokens, inputAttrs);\n        }\n        \n        if (outputTokens > 0) {\n            Attributes outputAttrs = Attributes.builder()\n                .put(MODEL_KEY, model)\n                .put(TOKEN_TYPE_KEY, \"output\")\n                .build();\n            tokenCounter.add(outputTokens, outputAttrs);\n        }\n    }\n    \n    public void recordRetry(String model, String errorType) {\n        Attributes attributes = Attributes.builder()\n            .put(MODEL_KEY, model)\n            .put(ERROR_TYPE_KEY, errorType)\n            .build();\n        \n        retryCounter.add(1, attributes);\n    }",
+                "purpose": "Extends metrics recorder with token usage and retry tracking for cost and reliability monitoring"
+              }
+            ]
+          }
+        ],
+        "notes": "Token usage is critical for cost management. Must handle cases where token usage is not available."
+      },
+      "expectation": "Token consumption and error/retry metrics enable cost tracking and reliability analysis at model granularity.",
+      "prediction": "Token and retry metrics will provide actionable insights for cost optimization and reliability improvements.",
+      "explanation": [
+        "Separate input/output token tracking enables fine-grained cost attribution",
+        "Model dimension allows per-model cost analysis",
+        "Retry tracking identifies problematic models or configurations"
+      ],
+      "status": "not_implemented",
+      "design_spec_quote": {
+        "selected_text": "Token usage. Error rate. Retries."
+      }
+    },
+    {
+      "id": 8,
+      "name": "Spring Boot Auto-Configuration",
+      "description": "Create Spring Boot starter for automatic OpenTelemetry integration with configuration properties",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Create langchain4j-spring-boot-starter-opentelemetry module",
+          "description": "Set up new Maven module for Spring Boot integration with proper dependencies",
+          "context": "Spring Boot starter for easy integration"
+        },
+        {
+          "step_number": 2,
+          "action": "Implement OpenTelemetryAutoConfiguration",
+          "description": "Create @AutoConfiguration class that auto-registers listeners when OpenTelemetry is present",
+          "context": "Automatic setup following Spring Boot conventions"
+        },
+        {
+          "step_number": 3,
+          "action": "Create OpenTelemetryProperties",
+          "description": "Define @ConfigurationProperties for langchain4j.opentelemetry.* properties (enabled, capture-content, etc.)",
+          "context": "Type-safe configuration via application.properties"
+        },
+        {
+          "step_number": 4,
+          "action": "Register listeners as beans",
+          "description": "Create @Bean methods for all OpenTelemetry listeners with conditional registration",
+          "context": "Spring-managed listener lifecycle"
+        }
+      ],
+      "test_cases": [
+        {
+          "id": 1,
+          "input": "Spring Boot app with langchain4j-spring-boot-starter-opentelemetry on classpath",
+          "expected": "OpenTelemetry listeners auto-registered without manual configuration",
+          "type": "integration"
+        },
+        {
+          "id": 2,
+          "input": "application.properties: langchain4j.opentelemetry.enabled=true",
+          "expected": "OpenTelemetry integration enabled",
+          "type": "integration"
+        },
+        {
+          "id": 3,
+          "input": "application.properties: langchain4j.opentelemetry.capture-content=true",
+          "expected": "Content capture enabled in listeners",
+          "type": "integration"
+        },
+        {
+          "id": 4,
+          "input": "application.properties: langchain4j.opentelemetry.enabled=false",
+          "expected": "OpenTelemetry listeners NOT registered",
+          "type": "integration"
+        },
+        {
+          "id": 5,
+          "input": "Spring Boot app without OpenTelemetry SDK on classpath",
+          "expected": "Auto-configuration gracefully skips without errors",
+          "type": "unit"
+        }
+      ],
+      "expected": {
+        "success": [
+          "Auto-configuration works without manual setup",
+          "Properties properly bind to configuration",
+          "Conditional registration based on enabled flag",
+          "No errors when OpenTelemetry not present"
+        ],
+        "failures": [
+          "Auto-configuration not triggered",
+          "Properties not bound",
+          "Errors when OpenTelemetry missing"
+        ],
+        "performance": [
+          "Auto-configuration overhead < 50ms at startup",
+          "No runtime performance impact"
+        ]
+      },
+      "implementation": {
+        "files": [
+          {
+            "file_path": "langchain4j-spring-boot-starter-opentelemetry/src/main/java/dev/langchain4j/opentelemetry/spring/OpenTelemetryAutoConfiguration.java",
+            "snippets": [
+              {
+                "start_line": 1,
+                "end_line": 80,
+                "code": "package dev.langchain4j.opentelemetry.spring;\n\nimport dev.langchain4j.opentelemetry.*;\nimport io.opentelemetry.api.OpenTelemetry;\nimport io.opentelemetry.api.trace.Tracer;\nimport io.opentelemetry.api.metrics.Meter;\nimport org.springframework.boot.autoconfigure.AutoConfiguration;\nimport org.springframework.boot.autoconfigure.condition.ConditionalOnClass;\nimport org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;\nimport org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;\nimport org.springframework.boot.context.properties.EnableConfigurationProperties;\nimport org.springframework.context.annotation.Bean;\n\n@AutoConfiguration\n@ConditionalOnClass(OpenTelemetry.class)\n@ConditionalOnProperty(prefix = \"langchain4j.opentelemetry\", name = \"enabled\", havingValue = \"true\", matchIfMissing = true)\n@EnableConfigurationProperties(OpenTelemetryProperties.class)\npublic class OpenTelemetryAutoConfiguration {\n    \n    @Bean\n    @ConditionalOnMissingBean\n    public OpenTelemetry openTelemetry() {\n        return OpenTelemetryConfigurer.configureOpenTelemetry();\n    }\n    \n    @Bean\n    @ConditionalOnMissingBean\n    public Tracer tracer(OpenTelemetry openTelemetry) {\n        return openTelemetry.getTracer(\"langchain4j\");\n    }\n    \n    @Bean\n    @ConditionalOnMissingBean\n    public Meter meter(OpenTelemetry openTelemetry) {\n        return openTelemetry.getMeter(\"langchain4j\");\n    }\n    \n    @Bean\n    public OpenTelemetryAiServiceListener aiServiceListener(Tracer tracer) {\n        return new OpenTelemetryAiServiceListener(tracer);\n    }\n    \n    @Bean\n    public OpenTelemetryChatModelListener chatModelListener(\n            Tracer tracer, \n            OpenTelemetryProperties properties) {\n        return new OpenTelemetryChatModelListener(\n            tracer,\n            properties.isCaptureContent(),\n            properties.getContentTruncationLength()\n        );\n    }\n    \n    @Bean\n    public OpenTelemetryToolExecutionListener toolListener(\n            Tracer tracer,\n            OpenTelemetryProperties properties) {\n        return new OpenTelemetryToolExecutionListener(\n            tracer,\n            properties.isCaptureParameters()\n        );\n    }\n    \n    @Bean\n    public OpenTelemetryGuardrailListener guardrailListener(Tracer tracer) {\n        return new OpenTelemetryGuardrailListener(tracer);\n    }\n    \n    @Bean\n    public OpenTelemetryMetricsRecorder metricsRecorder(Meter meter) {\n        return new OpenTelemetryMetricsRecorder(meter);\n    }\n}",
+                "purpose": "Auto-configures OpenTelemetry integration for Spring Boot applications"
+              }
+            ]
+          },
+          {
+            "file_path": "langchain4j-spring-boot-starter-opentelemetry/src/main/java/dev/langchain4j/opentelemetry/spring/OpenTelemetryProperties.java",
+            "snippets": [
+              {
+                "start_line": 1,
+                "end_line": 50,
+                "code": "package dev.langchain4j.opentelemetry.spring;\n\nimport org.springframework.boot.context.properties.ConfigurationProperties;\n\n@ConfigurationProperties(prefix = \"langchain4j.opentelemetry\")\npublic class OpenTelemetryProperties {\n    \n    private boolean enabled = true;\n    private boolean captureContent = false;\n    private int contentTruncationLength = 1000;\n    private boolean captureParameters = false;\n    \n    public boolean isEnabled() {\n        return enabled;\n    }\n    \n    public void setEnabled(boolean enabled) {\n        this.enabled = enabled;\n    }\n    \n    public boolean isCaptureContent() {\n        return captureContent;\n    }\n    \n    public void setCaptureContent(boolean captureContent) {\n        this.captureContent = captureContent;\n    }\n    \n    public int getContentTruncationLength() {\n        return contentTruncationLength;\n    }\n    \n    public void setContentTruncationLength(int contentTruncationLength) {\n        this.contentTruncationLength = contentTruncationLength;\n    }\n    \n    public boolean isCaptureParameters() {\n        return captureParameters;\n    }\n    \n    public void setCaptureParameters(boolean captureParameters) {\n        this.captureParameters = captureParameters;\n    }\n}",
+                "purpose": "Type-safe configuration properties for OpenTelemetry integration"
+              }
+            ]
+          }
+        ],
+        "notes": "Spring Boot integration must follow auto-configuration best practices and handle conditional registration properly."
+      },
+      "expectation": "Spring Boot applications can enable OpenTelemetry integration by simply adding the starter dependency, with zero-code configuration required for default behavior.",
+      "prediction": "Auto-configuration will seamlessly integrate with Spring Boot's dependency injection and property binding systems.",
+      "explanation": [
+        "ConditionalOnClass prevents errors when OpenTelemetry not present",
+        "ConditionalOnProperty enables easy enable/disable via properties",
+        "Type-safe properties improve developer experience"
+      ],
+      "status": "not_implemented",
+      "design_spec_quote": {
+        "selected_text": "Starters and documentation. Samples (Spring Boot/Quarkus)."
+      }
+    },
+    {
+      "id": 9,
+      "name": "Privacy and Performance - Default Redaction and Async Export",
+      "description": "Validate that content redaction is enabled by default and telemetry export is asynchronous",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Verify default redaction behavior",
+          "description": "Confirm that ChatModelListener and ToolListener do NOT capture content/parameters by default",
+          "context": "Privacy-first requirement"
+        },
+        {
+          "step_number": 2,
+          "action": "Test opt-in content capture",
+          "description": "Enable content capture via configuration and verify truncation works",
+          "context": "Controlled content capture for debugging"
+        },
+        {
+          "step_number": 3,
+          "action": "Verify async export",
+          "description": "Confirm that span and metric export happens asynchronously without blocking application threads",
+          "context": "Performance requirement"
+        },
+        {
+          "step_number": 4,
+          "action": "Measure instrumentation overhead",
+          "description": "Run performance tests to validate P95 overhead is < 5%",
+          "context": "Performance target"
+        }
+      ],
+      "test_cases": [
+        {
+          "id": 1,
+          "input": "Send chat message with default configuration",
+          "expected": "Span attributes do NOT include message content",
+          "type": "integration"
+        },
+        {
+          "id": 2,
+          "input": "Execute tool with parameters and default configuration",
+          "expected": "Span attributes do NOT include tool parameters",
+          "type": "integration"
+        },
+        {
+          "id": 3,
+          "input": "Enable content capture and send 5000 character message",
+          "expected": "Span includes truncated content (e.g., 1000 chars)",
+          "type": "integration"
+        },
+        {
+          "id": 4,
+          "input": "Measure time to complete AiService invocation with and without OpenTelemetry",
+          "expected": "P95 latency increase < 5%",
+          "type": "integration"
+        },
+        {
+          "id": 5,
+          "input": "Monitor thread usage during span export",
+          "expected": "Export happens on background thread, not application thread",
+          "type": "integration"
+        },
+        {
+          "id": 6,
+          "input": "Send 1000 requests and measure CPU overhead",
+          "expected": "CPU overhead < 5% compared to baseline",
+          "type": "integration"
+        }
+      ],
+      "expected": {
+        "success": [
+          "Content redacted by default",
+          "Opt-in content capture works with truncation",
+          "Export is asynchronous",
+          "P95 overhead < 5%",
+          "No blocking operations"
+        ],
+        "failures": [
+          "Content leaked in default mode",
+          "Export blocks application threads",
+          "Overhead exceeds 5%"
+        ],
+        "performance": [
+          "Instrumentation overhead < 5% P95",
+          "Export async with batch processing",
+          "Memory overhead < 10MB per 1000 spans"
+        ]
+      },
+      "implementation": {
+        "files": [
+          {
+            "file_path": "langchain4j-opentelemetry/src/test/java/dev/langchain4j/opentelemetry/PrivacyAndPerformanceTest.java",
+            "snippets": [
+              {
+                "start_line": 1,
+                "end_line": 100,
+                "code": "package dev.langchain4j.opentelemetry;\n\nimport org.junit.jupiter.api.Test;\nimport static org.assertj.core.api.Assertions.assertThat;\nimport io.opentelemetry.sdk.trace.data.SpanData;\nimport io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter;\n\npublic class PrivacyAndPerformanceTest {\n    \n    @Test\n    void testDefaultRedaction() {\n        // Setup in-memory exporter\n        InMemorySpanExporter exporter = InMemorySpanExporter.create();\n        \n        // Create listener with default config (redaction ON)\n        OpenTelemetryChatModelListener listener = new OpenTelemetryChatModelListener(tracer);\n        \n        // Send chat message\n        String sensitiveContent = \"My SSN is 123-45-6789\";\n        // ... send message ...\n        \n        // Assert content NOT in span attributes\n        List<SpanData> spans = exporter.getFinishedSpanItems();\n        assertThat(spans).hasSize(1);\n        SpanData span = spans.get(0);\n        assertThat(span.getAttributes().asMap()).doesNotContainKey(\"gen_ai.request.content\");\n        assertThat(span.getAttributes().asMap().values())\n            .noneMatch(v -> v.toString().contains(\"123-45-6789\"));\n    }\n    \n    @Test\n    void testOptInContentCaptureWithTruncation() {\n        // Setup with content capture enabled\n        OpenTelemetryChatModelListener listener = \n            new OpenTelemetryChatModelListener(tracer, true, 1000);\n        \n        // Send 5000 character message\n        String longMessage = \"a\".repeat(5000);\n        // ... send message ...\n        \n        // Assert content truncated to 1000 chars\n        SpanData span = exporter.getFinishedSpanItems().get(0);\n        String capturedContent = (String) span.getAttributes().get(\"gen_ai.request.content\");\n        assertThat(capturedContent).hasSize(1003); // 1000 + \"...\"\n    }\n    \n    @Test\n    void testAsyncExport() throws InterruptedException {\n        // Record thread during span creation\n        String creationThread = Thread.currentThread().getName();\n        \n        // Create and end span\n        // ...\n        \n        // Wait briefly for export\n        Thread.sleep(100);\n        \n        // Verify export happened on different thread\n        // (This is handled by OpenTelemetry SDK's BatchSpanProcessor)\n        assertThat(creationThread).doesNotContain(\"BatchSpanProcessor\");\n    }\n    \n    @Test\n    void testPerformanceOverhead() {\n        // Baseline: 1000 invocations without OpenTelemetry\n        long baselineP95 = measureP95Latency(1000, false);\n        \n        // With OpenTelemetry: 1000 invocations\n        long instrumentedP95 = measureP95Latency(1000, true);\n        \n        // Calculate overhead\n        double overheadPercent = ((double)(instrumentedP95 - baselineP95) / baselineP95) * 100;\n        \n        assertThat(overheadPercent).isLessThan(5.0);\n    }\n    \n    private long measureP95Latency(int iterations, boolean withOtel) {\n        List<Long> latencies = new ArrayList<>();\n        for (int i = 0; i < iterations; i++) {\n            long start = System.nanoTime();\n            // Execute AiService invocation\n            long end = System.nanoTime();\n            latencies.add(end - start);\n        }\n        Collections.sort(latencies);\n        return latencies.get((int)(iterations * 0.95));\n    }\n}",
+                "purpose": "Tests validating privacy (default redaction) and performance (<5% overhead) requirements"
+              }
+            ]
+          }
+        ],
+        "notes": "Privacy and performance are critical requirements that must be validated with comprehensive tests."
+      },
+      "expectation": "OpenTelemetry integration protects user privacy by default through content redaction, while maintaining < 5% performance overhead through asynchronous export and efficient instrumentation.",
+      "prediction": "Implementation will meet privacy and performance requirements through careful defaults and efficient OpenTelemetry SDK usage.",
+      "explanation": [
+        "Default redaction prevents accidental PII leakage",
+        "Opt-in content capture provides debugging capability when needed",
+        "Async export via BatchSpanProcessor prevents blocking",
+        "Performance testing validates overhead target"
+      ],
+      "status": "not_implemented",
+      "design_spec_quote": {
+        "selected_text": "Redaction ON by default. Opt-in content capture with truncation. Async export. P95 overhead target: <5%."
+      }
+    },
+    {
+      "id": 10,
+      "name": "Streaming Chat Model Support",
+      "description": "Implement optional streaming events for StreamingChatModel with proper span lifecycle",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Handle StreamingChatModel span creation",
+          "description": "Create span in onRequest that persists across streaming chunks",
+          "context": "Streaming requires span to remain open during chunk processing"
+        },
+        {
+          "step_number": 2,
+          "action": "Add optional streaming events",
+          "description": "Optionally emit events for each chunk received (disabled by default for performance)",
+          "context": "Streaming events useful for debugging but add overhead"
+        },
+        {
+          "step_number": 3,
+          "action": "End span on completion or error",
+          "description": "Properly end span when streaming completes or errors occur",
+          "context": "Span lifecycle must handle async streaming completion"
+        },
+        {
+          "step_number": 4,
+          "action": "Aggregate token usage across chunks",
+          "description": "Collect token usage information from final response and record as span attributes",
+          "context": "Token usage provided at end of stream"
+        }
+      ],
+      "test_cases": [
+        {
+          "id": 1,
+          "input": "StreamingChatModel request with OpenTelemetryChatModelListener",
+          "expected": "CLIENT span created that remains open during streaming",
+          "type": "integration"
+        },
+        {
+          "id": 2,
+          "input": "Streaming response with 10 chunks",
+          "expected": "Single span covers entire streaming operation, no events per chunk (default)",
+          "type": "integration"
+        },
+        {
+          "id": 3,
+          "input": "Streaming with optional chunk events enabled",
+          "expected": "Events emitted for each chunk received",
+          "type": "integration"
+        },
+        {
+          "id": 4,
+          "input": "Streaming that completes successfully",
+          "expected": "Span ends with StatusCode.OK and includes total token usage",
+          "type": "integration"
+        },
+        {
+          "id": 5,
+          "input": "Streaming that errors mid-stream",
+          "expected": "Span ends with StatusCode.ERROR and records exception",
+          "type": "integration"
+        },
+        {
+          "id": 6,
+          "input": "Thread context during streaming",
+          "expected": "Span properly propagated across async streaming threads",
+          "context": "Context propagation challenge with async streaming"
+        }
+      ],
+      "expected": {
+        "success": [
+          "Single span covers entire streaming operation",
+          "Token usage aggregated at completion",
+          "Optional chunk events available",
+          "Proper span lifecycle with async completion",
+          "Context propagation works across threads"
+        ],
+        "failures": [
+          "Span ends prematurely before stream completes",
+          "Token usage missing",
+          "Context not propagated",
+          "Memory leak from unclosed spans"
+        ],
+        "performance": [
+          "Streaming overhead < 2% with events disabled",
+          "Chunk events add < 100μs per chunk when enabled"
+        ]
+      },
+      "implementation": {
+        "files": [
+          {
+            "file_path": "langchain4j-opentelemetry/src/main/java/dev/langchain4j/opentelemetry/OpenTelemetryChatModelListener.java",
+            "snippets": [
+              {
+                "start_line": 130,
+                "end_line": 180,
+                "code": "    // Streaming support extensions\n    private final boolean emitStreamingEvents;\n    \n    // Handles streaming responses\n    @Override\n    public void onResponse(ChatModelResponseContext ctx) {\n        Span span = (Span) ctx.attributes().get(SPAN_KEY);\n        if (span == null) return;\n        \n        // Check if this is streaming or regular response\n        boolean isStreaming = ctx.attributes().containsKey(\"streaming\");\n        \n        if (isStreaming) {\n            // For streaming, this is called after all chunks received\n            // Token usage is in the final aggregated response\n            if (ctx.chatResponse().metadata().tokenUsage() != null) {\n                span.setAttribute(\"gen_ai.usage.input_tokens\", \n                    ctx.chatResponse().metadata().tokenUsage().inputTokenCount());\n                span.setAttribute(\"gen_ai.usage.output_tokens\", \n                    ctx.chatResponse().metadata().tokenUsage().outputTokenCount());\n            }\n            \n            // Optional: emit event for streaming completion\n            if (emitStreamingEvents) {\n                span.addEvent(\"streaming.completed\");\n            }\n        }\n        \n        // Common response handling\n        if (ctx.chatResponse().metadata().id() != null) {\n            span.setAttribute(\"gen_ai.response.id\", ctx.chatResponse().metadata().id());\n        }\n        \n        span.setStatus(StatusCode.OK);\n        span.end();\n    }\n    \n    // Called for each streaming chunk (if implemented)\n    public void onChunk(String chunk, Context context) {\n        if (emitStreamingEvents) {\n            Span span = Span.fromContext(context);\n            span.addEvent(\"chunk.received\", \n                Attributes.of(AttributeKey.longKey(\"chunk.length\"), (long)chunk.length()));\n        }\n    }",
+                "purpose": "Extends ChatModelListener to handle streaming responses with optional chunk events"
+              }
+            ]
+          }
+        ],
+        "notes": "Streaming support requires careful context propagation across async operations. Chunk events disabled by default for performance."
+      },
+      "expectation": "StreamingChatModel operations are properly traced with single span covering entire stream, optional chunk-level events, and correct token usage aggregation at completion.",
+      "prediction": "Streaming implementation will handle async completion and context propagation correctly using OpenTelemetry context API.",
+      "explanation": [
+        "Single span represents entire streaming operation for trace clarity",
+        "Optional chunk events provide fine-grained debugging when needed",
+        "Context propagation ensures span linkage across async boundaries",
+        "Token aggregation at end provides accurate cost tracking"
+      ],
+      "status": "not_implemented",
+      "design_spec_quote": {
+        "selected_text": "Optional streaming events. Context propagation."
+      }
+    },
+    {
+      "id": 11,
+      "name": "Integration Testing and Documentation",
+      "description": "Create comprehensive integration tests, examples, and documentation for the OpenTelemetry module",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Create integration test suite",
+          "description": "Build tests that exercise full AiService flows with OpenTelemetry enabled, verifying trace structure and metrics",
+          "context": "End-to-end validation of complete integration"
+        },
+        {
+          "step_number": 2,
+          "action": "Create Spring Boot example application",
+          "description": "Build sample Spring Boot app demonstrating OpenTelemetry integration with Jaeger/OTLP backend",
+          "context": "Reference implementation for Spring Boot users"
+        },
+        {
+          "step_number": 3,
+          "action": "Create Quarkus example application",
+          "description": "Build sample Quarkus app with OpenTelemetry integration",
+          "context": "Reference implementation for Quarkus users"
+        },
+        {
+          "step_number": 4,
+          "action": "Write comprehensive README",
+          "description": "Document module usage, configuration options, privacy settings, and integration guides",
+          "context": "User-facing documentation"
+        },
+        {
+          "step_number": 5,
+          "action": "Update main observability.md documentation",
+          "description": "Add OpenTelemetry section to existing LangChain4j observability documentation",
+          "context": "Integration with existing docs"
+        }
+      ],
+      "test_cases": [
+        {
+          "id": 1,
+          "input": "Run integration test with full AiService flow including tools and guardrails",
+          "expected": "Complete trace with root span, LLM spans, tool spans, and guardrail spans properly linked",
+          "type": "integration"
+        },
+        {
+          "id": 2,
+          "input": "Run Spring Boot example with OTLP exporter pointing to Jaeger",
+          "expected": "Traces visible in Jaeger UI with correct structure and attributes",
+          "type": "e2e"
+        },
+        {
+          "id": 3,
+          "input": "Run Quarkus example with metrics export",
+          "expected": "Metrics visible in Prometheus-compatible backend",
+          "type": "e2e"
+        },
+        {
+          "id": 4,
+          "input": "Follow README setup instructions",
+          "expected": "Developer can successfully integrate OpenTelemetry following documentation",
+          "type": "integration"
+        },
+        {
+          "id": 5,
+          "input": "Test with various OTEL_* environment variables",
+          "expected": "Configuration properly respected per OpenTelemetry specifications",
+          "type": "integration"
+        }
+      ],
+      "expected": {
+        "success": [
+          "Integration tests pass and verify trace structure",
+          "Example applications run successfully",
+          "Documentation is clear and complete",
+          "Examples demonstrate best practices"
+        ],
+        "failures": [
+          "Tests fail or incomplete coverage",
+          "Examples don't work",
+          "Documentation unclear or missing steps"
+        ],
+        "performance": [
+          "Integration tests complete in < 30 seconds",
+          "Example apps start in < 5 seconds"
+        ]
+      },
+      "implementation": {
+        "files": [
+          {
+            "file_path": "langchain4j-opentelemetry/src/test/java/dev/langchain4j/opentelemetry/OpenTelemetryIntegrationTest.java",
+            "snippets": [
+              {
+                "start_line": 1,
+                "end_line": 120,
+                "code": "package dev.langchain4j.opentelemetry;\n\nimport dev.langchain4j.service.AiServices;\nimport io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter;\nimport io.opentelemetry.sdk.testing.exporter.InMemoryMetricExporter;\nimport io.opentelemetry.sdk.trace.data.SpanData;\nimport org.junit.jupiter.api.Test;\nimport static org.assertj.core.api.Assertions.assertThat;\n\npublic class OpenTelemetryIntegrationTest {\n    \n    @Test\n    void testCompleteAiServiceFlowWithOpenTelemetry() {\n        // Setup in-memory exporters for testing\n        InMemorySpanExporter spanExporter = InMemorySpanExporter.create();\n        InMemoryMetricExporter metricExporter = InMemoryMetricExporter.create();\n        \n        // Configure OpenTelemetry with test exporters\n        OpenTelemetry otel = setupTestOpenTelemetry(spanExporter, metricExporter);\n        Tracer tracer = otel.getTracer(\"test\");\n        Meter meter = otel.getMeter(\"test\");\n        \n        // Create listeners\n        OpenTelemetryAiServiceListener aiServiceListener = new OpenTelemetryAiServiceListener(tracer);\n        OpenTelemetryChatModelListener chatModelListener = new OpenTelemetryChatModelListener(tracer);\n        OpenTelemetryToolExecutionListener toolListener = new OpenTelemetryToolExecutionListener(tracer);\n        OpenTelemetryGuardrailListener guardrailListener = new OpenTelemetryGuardrailListener(tracer);\n        OpenTelemetryMetricsRecorder metricsRecorder = new OpenTelemetryMetricsRecorder(meter);\n        \n        // Create mock ChatModel with listener\n        ChatModel mockModel = createMockChatModel(chatModelListener);\n        \n        // Define AiService with tool and guardrail\n        interface Assistant {\n            @UserMessage(\"Calculate {{input}}\")\n            String calculate(String input);\n        }\n        \n        // Build AiService with all listeners\n        Assistant assistant = AiServices.builder(Assistant.class)\n            .chatModel(mockModel)\n            .tools(new CalculatorTool())\n            .registerListener(aiServiceListener)\n            .registerListener(toolListener)\n            .registerListener(guardrailListener)\n            .build();\n        \n        // Execute\n        String result = assistant.calculate(\"2 + 2\");\n        \n        // Verify spans\n        List<SpanData> spans = spanExporter.getFinishedSpanItems();\n        \n        // Should have: 1 AiService span, 1 LLM span, 1 tool span\n        assertThat(spans).hasSizeGreaterThanOrEqualTo(3);\n        \n        // Find root AiService span\n        SpanData rootSpan = spans.stream()\n            .filter(s -> s.getName().startsWith(\"AiService.\"))\n            .findFirst()\n            .orElseThrow();\n        \n        assertThat(rootSpan.getAttributes().asMap())\n            .containsKey(AttributeKey.stringKey(\"ai_service.interface\"))\n            .containsKey(AttributeKey.stringKey(\"ai_service.method\"));\n        \n        // Find LLM span\n        SpanData llmSpan = spans.stream()\n            .filter(s -> s.getKind() == SpanKind.CLIENT)\n            .findFirst()\n            .orElseThrow();\n        \n        assertThat(llmSpan.getAttributes().asMap())\n            .containsKey(AttributeKey.stringKey(\"gen_ai.system\"))\n            .containsKey(AttributeKey.stringKey(\"gen_ai.request.model\"));\n        \n        // Find tool span\n        SpanData toolSpan = spans.stream()\n            .filter(s -> s.getName().startsWith(\"tool.\"))\n            .findFirst()\n            .orElseThrow();\n        \n        assertThat(toolSpan.getAttributes().asMap())\n            .containsKey(AttributeKey.stringKey(\"tool.name\"));\n        \n        // Verify parent-child relationships\n        assertThat(llmSpan.getParentSpanId()).isEqualTo(rootSpan.getSpanId());\n        assertThat(toolSpan.getParentSpanId()).isEqualTo(rootSpan.getSpanId());\n        \n        // Verify metrics\n        // (metric verification logic)\n    }\n    \n    @Test\n    void testContentRedactionByDefault() {\n        // ... test from scenario 9 ...\n    }\n    \n    @Test\n    void testErrorHandlingAndSpanStatus() {\n        // Test that errors properly set span status to ERROR\n        // ...\n    }\n}",
+                "purpose": "Comprehensive integration test validating complete OpenTelemetry integration with trace structure verification"
+              }
+            ]
+          },
+          {
+            "file_path": "langchain4j-opentelemetry/README.md",
+            "snippets": [
+              {
+                "start_line": 1,
+                "end_line": 100,
+                "code": "# LangChain4j OpenTelemetry Integration\n\nFirst-class OpenTelemetry instrumentation for LangChain4j.\n\n## Features\n\n- **Tracing**: Root span per AiService invocation with child spans for LLM, tool, and guardrail operations\n- **Metrics**: Request count, latency histograms, token usage, error rates, and retry tracking\n- **Privacy-First**: Content redaction enabled by default with opt-in capture\n- **GenAI Semantic Conventions**: Full compliance with OpenTelemetry GenAI conventions\n- **Spring Boot Integration**: Auto-configuration for zero-code setup\n- **Performance**: <5% P95 overhead with async export\n\n## Quick Start\n\n### Maven Dependency\n\n```xml\n<dependency>\n    <groupId>dev.langchain4j</groupId>\n    <artifactId>langchain4j-opentelemetry</artifactId>\n    <version>${langchain4j.version}</version>\n</dependency>\n```\n\n### Basic Usage\n\n```java\nimport dev.langchain4j.opentelemetry.*;\nimport io.opentelemetry.api.OpenTelemetry;\n\n// Configure OpenTelemetry (uses OTEL_* environment variables)\nOpenTelemetry otel = OpenTelemetryConfigurer.configureOpenTelemetry();\nTracer tracer = otel.getTracer(\"langchain4j\");\nMeter meter = otel.getMeter(\"langchain4j\");\n\n// Create listeners\nOpenTelemetryAiServiceListener aiServiceListener = new OpenTelemetryAiServiceListener(tracer);\nOpenTelemetryChatModelListener chatModelListener = new OpenTelemetryChatModelListener(tracer);\n\n// Build AiService with listeners\nMyAssistant assistant = AiServices.builder(MyAssistant.class)\n    .chatModel(chatModel)\n    .registerListener(aiServiceListener)\n    .build();\n\n// Build ChatModel with listener\nChatModel model = OpenAiChatModel.builder()\n    .apiKey(apiKey)\n    .listeners(List.of(chatModelListener))\n    .build();\n```\n\n### Spring Boot Integration\n\nAdd the Spring Boot starter:\n\n```xml\n<dependency>\n    <groupId>dev.langchain4j</groupId>\n    <artifactId>langchain4j-spring-boot-starter-opentelemetry</artifactId>\n</dependency>\n```\n\nConfigure in `application.properties`:\n\n```properties\n# Enable/disable OpenTelemetry (default: true)\nlangchain4j.opentelemetry.enabled=true\n\n# Content capture (default: false for privacy)\nlangchain4j.opentelemetry.capture-content=false\nlangchain4j.opentelemetry.content-truncation-length=1000\n\n# Parameter capture for tools (default: false)\nlangchain4j.opentelemetry.capture-parameters=false\n```\n\n### Environment Variables\n\nConfigure OpenTelemetry using standard OTEL_* variables:\n\n```bash\nexport OTEL_SERVICE_NAME=my-langchain4j-app\nexport OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317\nexport OTEL_TRACES_SAMPLER=traceidratio\nexport OTEL_TRACES_SAMPLER_ARG=0.1\n```\n\n## Privacy\n\nBy default, all content is redacted to protect privacy:\n- LLM request/response content NOT captured\n- Tool parameters NOT captured\n- Guardrail inputs NOT captured\n\nTo enable content capture for debugging:\n\n```java\nOpenTelemetryChatModelListener listener = \n    new OpenTelemetryChatModelListener(tracer, true, 1000);\n```\n\n## Performance\n\n- P95 overhead target: <5%\n- Async export via BatchSpanProcessor\n- Configurable sampling for high-volume applications\n\n## See Also\n\n- [LangChain4j Observability](https://docs.langchain4j.dev/tutorials/observability)\n- [OpenTelemetry GenAI Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/)\n- [Examples](examples/)\n",
+                "purpose": "Comprehensive documentation for users to integrate OpenTelemetry with LangChain4j"
+              }
+            ]
+          }
+        ],
+        "notes": "Documentation and examples are critical for adoption. Must clearly explain privacy defaults and configuration options."
+      },
+      "expectation": "Developers can successfully integrate OpenTelemetry with LangChain4j by following clear documentation and reference examples, with proper testing validating all functionality.",
+      "prediction": "Comprehensive tests and documentation will enable smooth adoption and proper usage of OpenTelemetry integration.",
+      "explanation": [
+        "Integration tests validate complete flows with proper trace structure",
+        "Example applications demonstrate real-world usage patterns",
+        "Documentation covers setup, configuration, and best practices",
+        "Privacy-first approach clearly documented and tested"
+      ],
+      "status": "not_implemented",
+      "design_spec_quote": {
+        "selected_text": "Starters and documentation. Samples (Spring Boot/Quarkus)."
+      }
+    }
+  ],
+  "summary": {
+    "total_scenarios": 11,
+    "complexity": "high",
+    "estimated_time": "8-10 hours for full implementation and testing"
+  }
+}
