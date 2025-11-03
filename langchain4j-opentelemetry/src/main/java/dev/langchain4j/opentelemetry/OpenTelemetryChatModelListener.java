@@ -131,7 +131,8 @@ public class OpenTelemetryChatModelListener implements ChatModelListener {
             return;
         }
 
-        Span span = activeSpans.remove(requestContext);
+        ChatModelRequestContext requestCtx = responseContext.chatModelRequestContext();
+        Span span = activeSpans.remove(requestCtx);
         if (span == null) {
             span = (Span) responseContext.attributes().get(SPAN_KEY);
         }
@@ -141,10 +142,9 @@ public class OpenTelemetryChatModelListener implements ChatModelListener {
             return;
         }
 
-        ChatModelRequestContext requestCtx = responseContext.chatModelRequestContext();
         try {
             ChatResponse response = responseContext.chatResponse();
-            ChatRequest request = responseContext.chatRequest();
+            ChatRequest request = requestCtx.chatRequest();
 
             // Add response attributes
             addResponseAttributes(span, response);
@@ -197,7 +197,7 @@ public class OpenTelemetryChatModelListener implements ChatModelListener {
 
             // Record error metric
             if (config.isMetricsEnabled()) {
-                recordErrorMetric(errorContext.chatRequest());
+                recordErrorMetric(requestCtx.chatRequest());
             }
 
         } catch (Exception e) {
@@ -276,17 +276,36 @@ public class OpenTelemetryChatModelListener implements ChatModelListener {
         for (ChatMessage message : request.messages()) {
             if (config.getContentCaptureMode() == ContentCaptureMode.FULL) {
                 // FULL mode: capture complete message content
-                span.addEvent("gen_ai.prompt",
-                    Attributes.of(
-                        AttributeKey.stringKey("message.role"), message.type().toString(),
-                        AttributeKey.stringKey("message.content"), message.text()
-                    ));
+                String content = extractMessageText(message);
+                if (content != null) {
+                    span.addEvent("gen_ai.prompt",
+                        Attributes.of(
+                            AttributeKey.stringKey("message.role"), message.type().toString(),
+                            AttributeKey.stringKey("message.content"), content
+                        ));
+                }
             } else if (config.getContentCaptureMode() == ContentCaptureMode.METADATA) {
                 // METADATA mode: capture only role, no content
                 span.addEvent("gen_ai.prompt.metadata",
                     Attributes.of(AttributeKey.stringKey("message.role"), message.type().toString()));
             }
         }
+    }
+
+    /**
+     * Extract text content from a ChatMessage, handling different message types.
+     */
+    private String extractMessageText(ChatMessage message) {
+        if (message instanceof dev.langchain4j.data.message.UserMessage) {
+            return ((dev.langchain4j.data.message.UserMessage) message).singleText();
+        } else if (message instanceof dev.langchain4j.data.message.SystemMessage) {
+            return ((dev.langchain4j.data.message.SystemMessage) message).text();
+        } else if (message instanceof AiMessage) {
+            return ((AiMessage) message).text();
+        } else if (message instanceof dev.langchain4j.data.message.ToolExecutionResultMessage) {
+            return ((dev.langchain4j.data.message.ToolExecutionResultMessage) message).text();
+        }
+        return null;
     }
 
     /**
