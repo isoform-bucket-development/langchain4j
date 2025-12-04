@@ -17,7 +17,9 @@ const CONFIG = {
     FOOD_COLOR: '#ff6b6b',
     INITIAL_SPEED: 150,
     SPEED_INCREMENT: 5,
-    MIN_SPEED: 50
+    MIN_SPEED: 50,
+    FEEDBACK_DURATION: 200,
+    FEEDBACK_COLOR: '#ffff00'
 };
 
 // Game states
@@ -55,6 +57,9 @@ class SnakeGame {
         this.lastUpdateTime = 0;
         this.initialized = false;
         this.loadStartTime = Date.now();
+        this.visualFeedbackActive = false;
+        this.feedbackStartTime = 0;
+        this.lastFoodConsumedPosition = null;
     }
 
     /**
@@ -337,6 +342,11 @@ class SnakeGame {
         const head = this.snake[0];
 
         if (head.x === this.food.x && head.y === this.food.y) {
+            // Store position for visual feedback before spawning new food
+            this.lastFoodConsumedPosition = { x: this.food.x, y: this.food.y };
+            this.visualFeedbackActive = true;
+            this.feedbackStartTime = Date.now();
+
             this.foodEaten = true;
             this.score += 10;
             this.updateScoreDisplay();
@@ -393,6 +403,9 @@ class SnakeGame {
         this.nextDirection = Direction.RIGHT;
         this.state = GameState.READY;
         this.foodEaten = false;
+        this.visualFeedbackActive = false;
+        this.feedbackStartTime = 0;
+        this.lastFoodConsumedPosition = null;
         this.initSnake();
         this.spawnFood();
         this.updateScoreDisplay();
@@ -414,6 +427,12 @@ class SnakeGame {
 
         // Draw food
         this.drawFood();
+
+        // Draw visual feedback effect if active
+        this.updateVisualFeedback();
+        if (this.visualFeedbackActive) {
+            this.drawFeedbackEffect();
+        }
     }
 
     /**
@@ -467,6 +486,57 @@ class SnakeGame {
             Math.PI * 2
         );
         this.ctx.fill();
+    }
+
+    /**
+     * Update visual feedback state based on elapsed time
+     */
+    updateVisualFeedback() {
+        if (this.visualFeedbackActive) {
+            const elapsed = Date.now() - this.feedbackStartTime;
+            if (elapsed >= CONFIG.FEEDBACK_DURATION) {
+                this.visualFeedbackActive = false;
+            }
+        }
+    }
+
+    /**
+     * Draw visual feedback effect at the consumed food position
+     */
+    drawFeedbackEffect() {
+        if (!this.lastFoodConsumedPosition) {
+            return;
+        }
+
+        const elapsed = Date.now() - this.feedbackStartTime;
+        const progress = Math.min(elapsed / CONFIG.FEEDBACK_DURATION, 1);
+
+        const x = this.lastFoodConsumedPosition.x * CONFIG.GRID_SIZE;
+        const y = this.lastFoodConsumedPosition.y * CONFIG.GRID_SIZE;
+        const centerX = x + CONFIG.GRID_SIZE / 2;
+        const centerY = y + CONFIG.GRID_SIZE / 2;
+
+        // Expanding ring effect with fade out
+        const maxRadius = CONFIG.GRID_SIZE * 1.5;
+        const radius = CONFIG.GRID_SIZE / 2 + (maxRadius - CONFIG.GRID_SIZE / 2) * progress;
+        const alpha = 1 - progress;
+
+        // Use save/restore if available, otherwise just set properties
+        if (typeof this.ctx.save === 'function') {
+            this.ctx.save();
+        }
+        const originalAlpha = this.ctx.globalAlpha;
+        this.ctx.globalAlpha = alpha;
+        this.ctx.strokeStyle = CONFIG.FEEDBACK_COLOR;
+        this.ctx.lineWidth = 3;
+        this.ctx.beginPath();
+        this.ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        this.ctx.stroke();
+        if (typeof this.ctx.restore === 'function') {
+            this.ctx.restore();
+        } else {
+            this.ctx.globalAlpha = originalAlpha;
+        }
     }
 
     /**
