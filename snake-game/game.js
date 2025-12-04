@@ -197,7 +197,7 @@ class SnakeGame {
             return;
         }
 
-        // Handle direction changes during gameplay
+        // Handle direction changes and pause during gameplay
         if (this.state === GameState.PLAYING) {
             switch (event.key) {
                 case 'ArrowUp':
@@ -230,7 +230,7 @@ class SnakeGame {
                     break;
                 case ' ':
                     this.togglePause();
-                    break;
+                    return; // Return early to prevent double toggle
             }
         }
 
@@ -238,6 +238,7 @@ class SnakeGame {
         if (this.state === GameState.GAME_OVER) {
             this.resetGame();
             this.startGame();
+            return;
         }
 
         // Resume on space if paused
