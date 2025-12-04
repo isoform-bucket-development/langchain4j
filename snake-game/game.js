@@ -19,8 +19,33 @@ const CONFIG = {
     SPEED_INCREMENT: 5,
     MIN_SPEED: 50,
     FEEDBACK_DURATION: 200,
-    FEEDBACK_COLOR: '#ffff00'
+    FEEDBACK_COLOR: '#ffff00',
+    MIN_VIEWPORT_WIDTH: 320,
+    RESPONSIVE_PADDING: 20
 };
+
+/**
+ * Calculate responsive board size based on viewport width
+ * @param {number} viewportWidth - Current viewport width
+ * @returns {number} Board size that fits viewport
+ */
+function calculateResponsiveBoardSize(viewportWidth) {
+    // Maximum board size is the default CONFIG value
+    const maxBoardSize = CONFIG.BOARD_WIDTH;
+
+    // Calculate available width (accounting for padding)
+    const availableWidth = viewportWidth - CONFIG.RESPONSIVE_PADDING * 2;
+
+    // Board size should be a multiple of GRID_SIZE for clean grid rendering
+    let boardSize = Math.min(maxBoardSize, availableWidth);
+    boardSize = Math.floor(boardSize / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+
+    // Ensure minimum playable size (at least 10 cells)
+    const minSize = CONFIG.GRID_SIZE * 10;
+    boardSize = Math.max(minSize, boardSize);
+
+    return boardSize;
+}
 
 // Game states
 const GameState = {
@@ -74,9 +99,13 @@ class SnakeGame {
                 throw new Error('Canvas element not found');
             }
 
-            // Set canvas dimensions
-            this.canvas.width = CONFIG.BOARD_WIDTH;
-            this.canvas.height = CONFIG.BOARD_HEIGHT;
+            // Calculate responsive board size
+            const viewportWidth = window.innerWidth || document.documentElement.clientWidth || CONFIG.BOARD_WIDTH;
+            this.boardSize = calculateResponsiveBoardSize(viewportWidth);
+
+            // Set canvas dimensions (responsive)
+            this.canvas.width = this.boardSize;
+            this.canvas.height = this.boardSize;
 
             // Get 2D rendering context
             this.ctx = this.canvas.getContext('2d');
@@ -119,8 +148,9 @@ class SnakeGame {
      * Initialize the snake at starting position
      */
     initSnake() {
-        const startX = Math.floor(CONFIG.BOARD_WIDTH / CONFIG.GRID_SIZE / 2);
-        const startY = Math.floor(CONFIG.BOARD_HEIGHT / CONFIG.GRID_SIZE / 2);
+        const boardSize = this.boardSize || CONFIG.BOARD_WIDTH;
+        const startX = Math.floor(boardSize / CONFIG.GRID_SIZE / 2);
+        const startY = Math.floor(boardSize / CONFIG.GRID_SIZE / 2);
 
         this.snake = [
             { x: startX, y: startY },
@@ -133,8 +163,9 @@ class SnakeGame {
      * Spawn food at a random empty position
      */
     spawnFood() {
-        const gridWidth = CONFIG.BOARD_WIDTH / CONFIG.GRID_SIZE;
-        const gridHeight = CONFIG.BOARD_HEIGHT / CONFIG.GRID_SIZE;
+        const boardSize = this.boardSize || CONFIG.BOARD_WIDTH;
+        const gridWidth = boardSize / CONFIG.GRID_SIZE;
+        const gridHeight = boardSize / CONFIG.GRID_SIZE;
 
         let newFood;
         do {
@@ -318,8 +349,9 @@ class SnakeGame {
      */
     checkCollisions() {
         const head = this.snake[0];
-        const gridWidth = CONFIG.BOARD_WIDTH / CONFIG.GRID_SIZE;
-        const gridHeight = CONFIG.BOARD_HEIGHT / CONFIG.GRID_SIZE;
+        const boardSize = this.boardSize || CONFIG.BOARD_WIDTH;
+        const gridWidth = boardSize / CONFIG.GRID_SIZE;
+        const gridHeight = boardSize / CONFIG.GRID_SIZE;
 
         // Wall collision
         if (head.x < 0 || head.x >= gridWidth || head.y < 0 || head.y >= gridHeight) {
@@ -606,7 +638,7 @@ class SnakeGame {
 
 // Export for testing (Node.js environment)
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { SnakeGame, CONFIG, GameState, Direction };
+    module.exports = { SnakeGame, CONFIG, GameState, Direction, calculateResponsiveBoardSize };
 }
 
 // Initialize game when DOM is loaded
