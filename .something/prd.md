@@ -210,15 +210,16 @@ And the game should remain playable at the new speed
 ## Technical Considerations
 
 ### High-Level Technical Approach
-The game will be implemented as a single-page web application using HTML5 Canvas for rendering and vanilla JavaScript for game logic. This approach ensures:
-- No framework dependencies for simple, fast loading
+The game will be implemented as a single-page web application using Vue3 framework with HTML5 Canvas for rendering. This approach ensures:
+- Vue3's Composition API for clean game state management and reactive updates
 - Canvas API provides efficient 2D game rendering
 - Local Storage API enables score persistence
-- Single HTML file deployment capability
+- Vite build tool for optimized production bundles with tree-shaking
 
 ### Integration Points
 - **Browser APIs**: HTML5 Canvas, Local Storage, RequestAnimationFrame
-- **No external dependencies**: Self-contained implementation
+- **Vue3 Framework**: Core framework for component structure and reactivity
+- **Vite**: Build tooling and development server
 
 ### Key Technical Constraints
 - Must work without server-side components
@@ -237,7 +238,7 @@ The game will be implemented as a single-page web application using HTML5 Canvas
 ## Design Specification
 
 ### Recommended Approach
-Implement a lightweight, vanilla JavaScript Snake game using HTML5 Canvas for rendering, with a clear separation between game state management and visual rendering.
+Implement a Vue3-based Snake game using HTML5 Canvas for rendering, with Vue's Composition API for state management and clear separation between game logic and visual rendering components.
 
 ### Key Technical Decisions
 
@@ -252,9 +253,9 @@ Implement a lightweight, vanilla JavaScript Snake game using HTML5 Canvas for re
 - **Recommendation**: RequestAnimationFrame with delta-time accumulator - ensures smooth 60 FPS rendering while maintaining consistent game speed
 
 #### 3. State Management
-- **Options Considered**: Global variables, Single state object, State machine pattern
-- **Tradeoffs**: Globals are simple but hard to maintain; single object organizes state but can grow complex; state machine adds structure but more code
-- **Recommendation**: Single state object with state machine for game phases - balances organization with simplicity for a game of this scope
+- **Options Considered**: Global variables, Single state object, State machine pattern, Vue3 Composition API
+- **Tradeoffs**: Globals are simple but hard to maintain; single object organizes state but can grow complex; state machine adds structure but more code; Vue3 Composition API provides reactive state with composables
+- **Recommendation**: Vue3 Composition API with composables (useGameState, useSnake, useFood) - provides reactive state management with clean separation of concerns
 
 #### 4. Data Persistence
 - **Options Considered**: Cookies, LocalStorage, IndexedDB
@@ -266,31 +267,40 @@ Implement a lightweight, vanilla JavaScript Snake game using HTML5 Canvas for re
 ```mermaid
 graph TB
     subgraph "Browser Environment"
-        UI[HTML/CSS UI Layer]
-        Canvas[Canvas Renderer]
-        Input[Input Handler]
+        subgraph "Vue3 Application"
+            App[App.vue<br/>Root Component]
+            GameBoard[GameBoard.vue<br/>Canvas Component]
+            ScorePanel[ScorePanel.vue<br/>Score Display]
+            GameOverlay[GameOverlay.vue<br/>State Overlays]
 
-        subgraph "Game Engine"
-            GameLoop[Game Loop<br/>RequestAnimationFrame]
-            State[Game State<br/>Snake, Food, Score]
-            Logic[Game Logic<br/>Movement, Collision]
+            subgraph "Composables"
+                useGame[useGameState<br/>Game Phase Control]
+                useSnake[useSnake<br/>Snake Logic]
+                useFood[useFood<br/>Food Generation]
+                useInput[useInput<br/>Keyboard Handler]
+            end
         end
 
+        Canvas[Canvas Renderer]
         Storage[LocalStorage<br/>High Score]
     end
 
-    Input -->|Direction Changes| Logic
-    GameLoop -->|Update Tick| Logic
-    Logic -->|State Changes| State
-    State -->|Render Data| Canvas
-    Logic -->|Score Updates| Storage
-    State -->|UI Updates| UI
+    App --> GameBoard
+    App --> ScorePanel
+    App --> GameOverlay
+    useInput -->|Direction Changes| useSnake
+    useGame -->|Update Tick| useSnake
+    useSnake -->|Collision Check| useGame
+    useFood -->|Food Data| GameBoard
+    useSnake -->|Snake Data| GameBoard
+    GameBoard -->|Render| Canvas
+    useGame -->|Score Updates| Storage
 ```
 
 ### Key Considerations
-- **Performance**: Canvas rendering with RAF ensures smooth 60 FPS; collision detection limited to head-only checks minimizes computation per frame
+- **Performance**: Canvas rendering with RAF ensures smooth 60 FPS; Vue3's efficient reactivity system minimizes unnecessary updates; collision detection limited to head-only checks minimizes computation per frame
 - **Security**: No external data input; LocalStorage for trusted score data only; no eval or dynamic code execution
-- **Scalability**: Modular design allows easy addition of features like multiple food types or game modes
+- **Scalability**: Vue3 component-based architecture and composables allow easy addition of features like multiple food types, game modes, or settings panels
 
 ### Risk Management
 - **Browser Compatibility Risk**: Different browsers may handle Canvas or keyboard events differently; mitigate by using well-supported APIs and testing across major browsers
@@ -310,6 +320,8 @@ graph TB
 - Modern web browser with HTML5 Canvas support
 - JavaScript enabled in user's browser
 - LocalStorage available and not blocked
+- Vue3 framework (bundled via Vite)
+- Vite build tool for development and production builds
 
 ### Assumptions
 - Users have access to a physical keyboard for controls
