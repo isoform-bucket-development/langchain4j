@@ -9,6 +9,7 @@ import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.output.FinishReason;
 import dev.langchain4j.model.output.TokenUsage;
+import dev.langchain4j.opentelemetry.config.OpenTelemetryLangChain4jConfig;
 import dev.langchain4j.opentelemetry.semconv.GenAiAttributes;
 import dev.langchain4j.opentelemetry.semconv.GenAiSpanNames;
 import io.opentelemetry.api.GlobalOpenTelemetry;
@@ -24,6 +25,7 @@ import io.opentelemetry.context.Scope;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * ChatModelListener implementation that generates OpenTelemetry spans and metrics.
@@ -42,15 +44,17 @@ public class OpenTelemetryChatModelListener implements ChatModelListener {
     private static final String SCOPE_KEY = "otel.scope";
     private static final String CONTEXT_KEY = "otel.context";
     private static final String START_TIME_KEY = "otel.start_time";
+    private static final String TRACING_SKIPPED_KEY = "otel.tracing_skipped";
 
     private final Tracer tracer;
     private final boolean streaming;
+    private final AtomicReference<OpenTelemetryLangChain4jConfig> configRef;
 
     /**
      * Creates a new listener using the global OpenTelemetry tracer.
      */
     public OpenTelemetryChatModelListener() {
-        this(GlobalOpenTelemetry.getTracerProvider(), false);
+        this(GlobalOpenTelemetry.getTracerProvider(), false, OpenTelemetryLangChain4jConfig.defaultConfig());
     }
 
     /**
@@ -60,8 +64,21 @@ public class OpenTelemetryChatModelListener implements ChatModelListener {
      * @param streaming whether this listener is used for streaming operations
      */
     public OpenTelemetryChatModelListener(TracerProvider tracerProvider, boolean streaming) {
+        this(tracerProvider, streaming, OpenTelemetryLangChain4jConfig.defaultConfig());
+    }
+
+    /**
+     * Creates a new listener with the specified tracer provider and configuration.
+     *
+     * @param tracerProvider the tracer provider to use
+     * @param streaming whether this listener is used for streaming operations
+     * @param config the configuration to use
+     */
+    public OpenTelemetryChatModelListener(TracerProvider tracerProvider, boolean streaming,
+                                          OpenTelemetryLangChain4jConfig config) {
         this.tracer = tracerProvider.get(INSTRUMENTATION_NAME, INSTRUMENTATION_VERSION);
         this.streaming = streaming;
+        this.configRef = new AtomicReference<>(config != null ? config : OpenTelemetryLangChain4jConfig.defaultConfig());
     }
 
     /**
@@ -75,6 +92,14 @@ public class OpenTelemetryChatModelListener implements ChatModelListener {
 
     @Override
     public void onRequest(ChatModelRequestContext requestContext) {
+        // Check if tracing is enabled in the current configuration
+        OpenTelemetryLangChain4jConfig currentConfig = configRef.get();
+        if (!currentConfig.isTracingEnabled()) {
+            // Mark that tracing was skipped for this request
+            requestContext.attributes().put(TRACING_SKIPPED_KEY, Boolean.TRUE);
+            return;
+        }
+
         ChatRequest request = requestContext.chatRequest();
         ModelProvider provider = requestContext.modelProvider();
         Map<Object, Object> attributes = requestContext.attributes();
@@ -132,6 +157,13 @@ public class OpenTelemetryChatModelListener implements ChatModelListener {
     @Override
     public void onResponse(ChatModelResponseContext responseContext) {
         Map<Object, Object> attributes = responseContext.attributes();
+
+        // Check if tracing was skipped for this request
+        Boolean tracingSkipped = (Boolean) attributes.get(TRACING_SKIPPED_KEY);
+        if (Boolean.TRUE.equals(tracingSkipped)) {
+            attributes.remove(TRACING_SKIPPED_KEY);
+            return;
+        }
 
         Span span = (Span) attributes.get(SPAN_KEY);
         Scope scope = (Scope) attributes.get(SCOPE_KEY);
@@ -193,6 +225,13 @@ public class OpenTelemetryChatModelListener implements ChatModelListener {
     public void onError(ChatModelErrorContext errorContext) {
         Map<Object, Object> attributes = errorContext.attributes();
 
+        // Check if tracing was skipped for this request
+        Boolean tracingSkipped = (Boolean) attributes.get(TRACING_SKIPPED_KEY);
+        if (Boolean.TRUE.equals(tracingSkipped)) {
+            attributes.remove(TRACING_SKIPPED_KEY);
+            return;
+        }
+
         Span span = (Span) attributes.get(SPAN_KEY);
         Scope scope = (Scope) attributes.get(SCOPE_KEY);
 
@@ -241,11 +280,34 @@ public class OpenTelemetryChatModelListener implements ChatModelListener {
     }
 
     /**
+     * Returns the current configuration.
+     *
+     * @return the current configuration
+     */
+    public OpenTelemetryLangChain4jConfig getConfig() {
+        return configRef.get();
+    }
+
+    /**
+     * Updates the configuration at runtime.
+     * This allows enabling or disabling tracing without restarting the application.
+     *
+     * @param config the new configuration to use
+     */
+    public void updateConfig(OpenTelemetryLangChain4jConfig config) {
+        if (config == null) {
+            throw new IllegalArgumentException("Config cannot be null");
+        }
+        configRef.set(config);
+    }
+
+    /**
      * Builder for creating OpenTelemetryChatModelListener instances.
      */
     public static class Builder {
         private TracerProvider tracerProvider = GlobalOpenTelemetry.getTracerProvider();
         private boolean streaming = false;
+        private OpenTelemetryLangChain4jConfig config = OpenTelemetryLangChain4jConfig.defaultConfig();
 
         /**
          * Sets the tracer provider to use.
@@ -270,12 +332,23 @@ public class OpenTelemetryChatModelListener implements ChatModelListener {
         }
 
         /**
+         * Sets the configuration for this listener.
+         *
+         * @param config the configuration to use
+         * @return this builder
+         */
+        public Builder config(OpenTelemetryLangChain4jConfig config) {
+            this.config = config != null ? config : OpenTelemetryLangChain4jConfig.defaultConfig();
+            return this;
+        }
+
+        /**
          * Builds the listener.
          *
          * @return the configured listener
          */
         public OpenTelemetryChatModelListener build() {
-            return new OpenTelemetryChatModelListener(tracerProvider, streaming);
+            return new OpenTelemetryChatModelListener(tracerProvider, streaming, config);
         }
     }
 }
