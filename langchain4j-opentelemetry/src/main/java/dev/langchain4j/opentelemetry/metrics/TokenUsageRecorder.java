@@ -158,6 +158,81 @@ public class TokenUsageRecorder {
     }
 
     /**
+     * Records the duration of a successful operation.
+     *
+     * @param durationMs    the duration in milliseconds
+     * @param system        the GenAI system/provider (e.g., "openai", "anthropic")
+     * @param model         the model name (e.g., "gpt-4o", "claude-3-sonnet")
+     * @param operationName the operation name (e.g., "chat", "completion")
+     */
+    public void recordDuration(long durationMs, String system, String model, String operationName) {
+        Attributes attributes = buildAttributes(system, model, operationName);
+        recordDuration(durationMs, attributes);
+    }
+
+    /**
+     * Records the duration of a successful operation with the specified attributes.
+     *
+     * @param durationMs the duration in milliseconds
+     * @param attributes the attributes/dimensions for the metric
+     */
+    public void recordDuration(long durationMs, Attributes attributes) {
+        double durationSeconds = durationMs / 1000.0;
+        metrics.getOperationDurationHistogram().record(durationSeconds, attributes);
+    }
+
+    /**
+     * Records the duration of a failed operation with error type.
+     *
+     * @param durationMs    the duration in milliseconds
+     * @param system        the GenAI system/provider (e.g., "openai", "anthropic")
+     * @param model         the model name (e.g., "gpt-4o", "claude-3-sonnet")
+     * @param operationName the operation name (e.g., "chat", "completion")
+     * @param errorType     the error type (e.g., exception class name)
+     */
+    public void recordDurationWithError(long durationMs, String system, String model,
+                                         String operationName, String errorType) {
+        AttributesBuilder builder = Attributes.builder();
+
+        if (system != null) {
+            builder.put(GenAiMetrics.ATTR_GEN_AI_SYSTEM, system);
+        }
+
+        if (model != null) {
+            builder.put(GenAiMetrics.ATTR_GEN_AI_REQUEST_MODEL, model);
+        }
+
+        if (operationName != null) {
+            builder.put(GenAiMetrics.ATTR_GEN_AI_OPERATION_NAME, operationName);
+        }
+
+        if (errorType != null) {
+            builder.put(GenAiMetrics.ATTR_ERROR_TYPE, errorType);
+        }
+
+        double durationSeconds = durationMs / 1000.0;
+        metrics.getOperationDurationHistogram().record(durationSeconds, builder.build());
+    }
+
+    /**
+     * Records the duration of a failed operation with error type and specified attributes.
+     *
+     * @param durationMs the duration in milliseconds
+     * @param attributes the base attributes/dimensions for the metric
+     * @param errorType  the error type (e.g., exception class name)
+     */
+    public void recordDurationWithError(long durationMs, Attributes attributes, String errorType) {
+        AttributesBuilder builder = attributes.toBuilder();
+
+        if (errorType != null) {
+            builder.put(GenAiMetrics.ATTR_ERROR_TYPE, errorType);
+        }
+
+        double durationSeconds = durationMs / 1000.0;
+        metrics.getOperationDurationHistogram().record(durationSeconds, builder.build());
+    }
+
+    /**
      * Returns the underlying GenAiMetrics instance.
      *
      * @return the GenAiMetrics instance

@@ -2,9 +2,13 @@ package dev.langchain4j.opentelemetry.metrics;
 
 import io.opentelemetry.api.GlobalOpenTelemetry;
 import io.opentelemetry.api.common.AttributeKey;
+import io.opentelemetry.api.metrics.DoubleHistogram;
 import io.opentelemetry.api.metrics.LongCounter;
 import io.opentelemetry.api.metrics.Meter;
 import io.opentelemetry.api.metrics.MeterProvider;
+
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * OpenTelemetry metrics instruments for GenAI operations.
@@ -41,6 +45,20 @@ public final class GenAiMetrics {
      */
     public static final String ERROR_COUNTER_NAME = "gen_ai.client.operation.error";
 
+    /**
+     * Histogram for operation duration in seconds.
+     * Records the time taken for GenAI operations to complete.
+     */
+    public static final String OPERATION_DURATION_HISTOGRAM_NAME = "gen_ai.client.operation.duration";
+
+    /**
+     * Default histogram buckets covering typical LLM latencies (100ms to 30s).
+     * Values are in seconds: 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 30.0
+     */
+    public static final List<Double> DEFAULT_DURATION_BUCKETS = Arrays.asList(
+            0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 30.0
+    );
+
     // Common dimension attribute keys
     /**
      * The GenAI system/provider (e.g., "openai", "anthropic").
@@ -71,6 +89,7 @@ public final class GenAiMetrics {
     private final LongCounter inputTokensCounter;
     private final LongCounter outputTokensCounter;
     private final LongCounter errorCounter;
+    private final DoubleHistogram operationDurationHistogram;
 
     /**
      * Creates a new GenAiMetrics instance using the global MeterProvider.
@@ -108,6 +127,12 @@ public final class GenAiMetrics {
                 .setDescription("Counts the number of errors in GenAI operations")
                 .setUnit("{error}")
                 .build();
+
+        this.operationDurationHistogram = meter.histogramBuilder(OPERATION_DURATION_HISTOGRAM_NAME)
+                .setDescription("Measures the duration of GenAI operations in seconds")
+                .setUnit("s")
+                .setExplicitBucketBoundariesAdvice(DEFAULT_DURATION_BUCKETS)
+                .build();
     }
 
     /**
@@ -144,6 +169,15 @@ public final class GenAiMetrics {
      */
     public LongCounter getErrorCounter() {
         return errorCounter;
+    }
+
+    /**
+     * Returns the operation duration histogram.
+     *
+     * @return the operation duration histogram
+     */
+    public DoubleHistogram getOperationDurationHistogram() {
+        return operationDurationHistogram;
     }
 
     /**
