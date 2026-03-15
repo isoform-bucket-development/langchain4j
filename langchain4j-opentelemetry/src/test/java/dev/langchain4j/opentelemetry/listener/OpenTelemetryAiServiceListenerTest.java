@@ -443,14 +443,16 @@ class OpenTelemetryAiServiceListenerTest {
     }
 
     @Test
-    @DisplayName("Should return all three listeners")
-    void shouldReturnAllThreeListeners() {
+    @DisplayName("Should return all five listeners including guardrail listeners")
+    void shouldReturnAllFiveListeners() {
         OpenTelemetryAiServiceListener listener = createListener();
-        assertThat(listener.getAllListeners()).hasSize(3);
+        assertThat(listener.getAllListeners()).hasSize(5);
         assertThat(listener.getAllListeners()).contains(
                 listener.getStartedListener(),
                 listener.getCompletedListener(),
-                listener.getErrorListener()
+                listener.getErrorListener(),
+                listener.getInputGuardrailListener(),
+                listener.getOutputGuardrailListener()
         );
     }
 
