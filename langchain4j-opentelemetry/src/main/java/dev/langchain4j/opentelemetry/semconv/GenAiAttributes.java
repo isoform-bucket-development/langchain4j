@@ -174,4 +174,36 @@ public final class GenAiAttributes {
      * The result of the tool execution.
      */
     public static final AttributeKey<String> TOOL_RESULT = AttributeKey.stringKey("tool.result");
+
+    // Content capture attributes (for configurable content capture modes)
+
+    /**
+     * The user message content for the request.
+     * Used when content capture mode is FULL.
+     */
+    public static final AttributeKey<String> GEN_AI_REQUEST_USER_MESSAGE = AttributeKey.stringKey("gen_ai.request.user_message");
+
+    /**
+     * The system message content for the request.
+     * Used when content capture mode is FULL.
+     */
+    public static final AttributeKey<String> GEN_AI_REQUEST_SYSTEM_MESSAGE = AttributeKey.stringKey("gen_ai.request.system_message");
+
+    /**
+     * The number of messages in the request.
+     * Used when content capture mode is METADATA or higher.
+     */
+    public static final AttributeKey<Long> GEN_AI_REQUEST_MESSAGE_COUNT = AttributeKey.longKey("gen_ai.request.message_count");
+
+    /**
+     * The response/completion content from the model.
+     * Used when content capture mode is FULL.
+     */
+    public static final AttributeKey<String> GEN_AI_RESPONSE_CONTENT = AttributeKey.stringKey("gen_ai.response.content");
+
+    /**
+     * The message roles in the request (e.g., "user", "system", "assistant").
+     * Used when content capture mode is METADATA or higher.
+     */
+    public static final AttributeKey<List<String>> GEN_AI_REQUEST_MESSAGE_ROLES = AttributeKey.stringArrayKey("gen_ai.request.message_roles");
 }
