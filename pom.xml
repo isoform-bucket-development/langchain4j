@@ -108,6 +108,9 @@
         <module>langchain4j-agentic</module>
         <module>langchain4j-agentic-a2a</module>
 
+        <!-- opentelemetry instrumentation -->
+        <module>langchain4j-opentelemetry</module>
+
         <!-- integration tests -->
         <module>integration-tests</module>
 
