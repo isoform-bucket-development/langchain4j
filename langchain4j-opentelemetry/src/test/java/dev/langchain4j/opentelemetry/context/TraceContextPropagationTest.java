@@ -188,7 +188,11 @@ class TraceContextPropagationTest {
         UUID innerInvocationId = UUID.randomUUID();
 
         // Act: Create nested spans mimicking AiService -> ChatModel -> nested call
-        Span outerSpan = spanContextManager.startSpan("AiService.outerMethod", outerInvocationId);
+        // Ensure we start from root context to make outer span a true root span
+        Span outerSpan;
+        try (Scope rootScope = Context.root().makeCurrent()) {
+            outerSpan = spanContextManager.startSpan("AiService.outerMethod", outerInvocationId);
+        }
 
         // Within outer span context, start an inner span
         Span innerSpan;
