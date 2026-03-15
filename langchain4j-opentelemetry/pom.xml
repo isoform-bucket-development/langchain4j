@@ -59,6 +59,14 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- LangChain4j for integration testing -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+
         <!-- JUnit Jupiter -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>

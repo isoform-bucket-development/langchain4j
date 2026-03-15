@@ -1,7 +1,6 @@
 package dev.langchain4j.opentelemetry.semconv;
 
 import io.opentelemetry.api.common.AttributeKey;
-
 import java.util.List;
 
 /**
@@ -64,7 +63,7 @@ public final class GenAiAttributes {
     public static final AttributeKey<Long> GEN_AI_USAGE_TOTAL_TOKENS = AttributeKey.longKey("gen_ai.usage.total_tokens");
 
     /**
-     * The operation name (e.g., "chat", "completion").
+     * The operation name (e.g., "chat", "completion", "aiservice").
      */
     public static final AttributeKey<String> GEN_AI_OPERATION_NAME = AttributeKey.stringKey("gen_ai.operation.name");
 
@@ -77,4 +76,43 @@ public final class GenAiAttributes {
      * Error type for failed operations.
      */
     public static final AttributeKey<String> ERROR_TYPE = AttributeKey.stringKey("error.type");
+
+    // AiService-specific attributes
+
+    /**
+     * The fully-qualified name of the AiService interface.
+     */
+    public static final AttributeKey<String> AISERVICE_INTERFACE_NAME = AttributeKey.stringKey("aiservice.interface.name");
+
+    /**
+     * The name of the method being invoked on the AiService.
+     */
+    public static final AttributeKey<String> AISERVICE_METHOD_NAME = AttributeKey.stringKey("aiservice.method.name");
+
+    /**
+     * The unique identifier for the AiService invocation.
+     */
+    public static final AttributeKey<String> AISERVICE_INVOCATION_ID = AttributeKey.stringKey("aiservice.invocation.id");
+
+    // Content capture attributes
+
+    /**
+     * The prompt content sent to the model.
+     */
+    public static final AttributeKey<String> GEN_AI_PROMPT = AttributeKey.stringKey("gen_ai.prompt");
+
+    /**
+     * The completion/response content from the model.
+     */
+    public static final AttributeKey<String> GEN_AI_COMPLETION = AttributeKey.stringKey("gen_ai.completion");
+
+    /**
+     * The system message content.
+     */
+    public static final AttributeKey<String> GEN_AI_SYSTEM_MESSAGE = AttributeKey.stringKey("gen_ai.system.message");
+
+    /**
+     * The user message content.
+     */
+    public static final AttributeKey<String> GEN_AI_USER_MESSAGE = AttributeKey.stringKey("gen_ai.user.message");
 }
