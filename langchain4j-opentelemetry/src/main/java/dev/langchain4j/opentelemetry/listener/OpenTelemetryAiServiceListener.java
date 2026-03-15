@@ -1,6 +1,8 @@
 package dev.langchain4j.opentelemetry.listener;
 
 import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.guardrail.GuardrailResult;
+import dev.langchain4j.guardrail.OutputGuardrailResult;
 import dev.langchain4j.invocation.InvocationContext;
 import dev.langchain4j.opentelemetry.config.ContentCaptureMode;
 import dev.langchain4j.opentelemetry.config.OpenTelemetryLangChain4jConfig;
@@ -10,15 +12,25 @@ import dev.langchain4j.opentelemetry.semconv.GenAiSpanNames;
 import dev.langchain4j.observability.api.event.AiServiceCompletedEvent;
 import dev.langchain4j.observability.api.event.AiServiceErrorEvent;
 import dev.langchain4j.observability.api.event.AiServiceStartedEvent;
+import dev.langchain4j.observability.api.event.InputGuardrailExecutedEvent;
+import dev.langchain4j.observability.api.event.OutputGuardrailExecutedEvent;
 import dev.langchain4j.observability.api.listener.AiServiceCompletedListener;
 import dev.langchain4j.observability.api.listener.AiServiceErrorListener;
 import dev.langchain4j.observability.api.listener.AiServiceStartedListener;
+import dev.langchain4j.observability.api.listener.InputGuardrailExecutedListener;
+import dev.langchain4j.observability.api.listener.OutputGuardrailExecutedListener;
 import io.opentelemetry.api.GlobalOpenTelemetry;
 import io.opentelemetry.api.OpenTelemetry;
 import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanBuilder;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.api.trace.TracerProvider;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * OpenTelemetry instrumentation for AiService method invocations.
@@ -40,16 +52,18 @@ import io.opentelemetry.api.trace.TracerProvider;
  * </pre>
  */
 public final class OpenTelemetryAiServiceListener
-        implements AiServiceStartedListener, AiServiceCompletedListener, AiServiceErrorListener {
+        implements AiServiceStartedListener, AiServiceCompletedListener, AiServiceErrorListener,
+        InputGuardrailExecutedListener, OutputGuardrailExecutedListener {
 
     private static final String INSTRUMENTATION_NAME = "langchain4j-opentelemetry";
     private static final String INSTRUMENTATION_VERSION = "1.0.0";
 
     private final SpanContextManager spanContextManager;
     private final OpenTelemetryLangChain4jConfig config;
+    private final Tracer tracer;
 
     private OpenTelemetryAiServiceListener(Builder builder) {
-        Tracer tracer = builder.tracerProvider.get(INSTRUMENTATION_NAME, INSTRUMENTATION_VERSION);
+        this.tracer = builder.tracerProvider.get(INSTRUMENTATION_NAME, INSTRUMENTATION_VERSION);
         this.spanContextManager = new SpanContextManager(tracer);
         this.config = builder.config;
     }
@@ -136,6 +150,125 @@ public final class OpenTelemetryAiServiceListener
 
         spanContextManager.recordException(ctx.invocationId(), error);
         spanContextManager.endSpan(ctx.invocationId(), StatusCode.ERROR, error.getMessage());
+    }
+
+    @Override
+    public void onEvent(InputGuardrailExecutedEvent event) {
+        if (!config.isTracingEnabled()) {
+            return;
+        }
+
+        InvocationContext ctx = event.invocationContext();
+        String guardrailName = getGuardrailSimpleName(event.guardrailClass());
+        String spanName = GenAiSpanNames.guardrailInput(guardrailName);
+
+        // Get the parent context from the active AiService span
+        Context parentContext = spanContextManager.getContext(ctx.invocationId());
+
+        // Create child span for guardrail execution
+        SpanBuilder spanBuilder = tracer.spanBuilder(spanName);
+        if (parentContext != null) {
+            spanBuilder.setParent(parentContext);
+        }
+
+        Span guardrailSpan = spanBuilder.startSpan();
+        try (Scope ignored = guardrailSpan.makeCurrent()) {
+            // Set guardrail attributes
+            guardrailSpan.setAttribute(GenAiAttributes.GUARDRAIL_NAME, guardrailName);
+            guardrailSpan.setAttribute(GenAiAttributes.GUARDRAIL_TYPE, "input");
+            guardrailSpan.setAttribute(GenAiAttributes.AISERVICE_INVOCATION_ID, ctx.invocationId().toString());
+
+            GuardrailResult<?> result = event.result();
+            boolean passed = result.isSuccess();
+
+            guardrailSpan.setAttribute(GenAiAttributes.GUARDRAIL_PASS, passed);
+            guardrailSpan.setAttribute(GenAiAttributes.GUARDRAIL_RESULT, result.result().name());
+
+            if (passed) {
+                guardrailSpan.setStatus(StatusCode.OK);
+            } else {
+                guardrailSpan.setStatus(StatusCode.ERROR);
+
+                // Capture failure details
+                List<?> failures = result.failures();
+                if (!failures.isEmpty()) {
+                    String failureMessage = failures.stream()
+                            .map(Object::toString)
+                            .collect(Collectors.joining("; "));
+                    guardrailSpan.setAttribute(GenAiAttributes.GUARDRAIL_FAILURE_MESSAGE, failureMessage);
+                }
+            }
+        } finally {
+            guardrailSpan.end();
+        }
+    }
+
+    @Override
+    public void onEvent(OutputGuardrailExecutedEvent event) {
+        if (!config.isTracingEnabled()) {
+            return;
+        }
+
+        InvocationContext ctx = event.invocationContext();
+        String guardrailName = getGuardrailSimpleName(event.guardrailClass());
+        String spanName = GenAiSpanNames.guardrailOutput(guardrailName);
+
+        // Get the parent context from the active AiService span
+        Context parentContext = spanContextManager.getContext(ctx.invocationId());
+
+        // Create child span for guardrail execution
+        SpanBuilder spanBuilder = tracer.spanBuilder(spanName);
+        if (parentContext != null) {
+            spanBuilder.setParent(parentContext);
+        }
+
+        Span guardrailSpan = spanBuilder.startSpan();
+        try (Scope ignored = guardrailSpan.makeCurrent()) {
+            // Set guardrail attributes
+            guardrailSpan.setAttribute(GenAiAttributes.GUARDRAIL_NAME, guardrailName);
+            guardrailSpan.setAttribute(GenAiAttributes.GUARDRAIL_TYPE, "output");
+            guardrailSpan.setAttribute(GenAiAttributes.AISERVICE_INVOCATION_ID, ctx.invocationId().toString());
+
+            OutputGuardrailResult result = event.result();
+            boolean passed = result.isSuccess();
+
+            guardrailSpan.setAttribute(GenAiAttributes.GUARDRAIL_PASS, passed);
+            guardrailSpan.setAttribute(GenAiAttributes.GUARDRAIL_RESULT, result.result().name());
+
+            if (passed) {
+                guardrailSpan.setStatus(StatusCode.OK);
+            } else {
+                guardrailSpan.setStatus(StatusCode.ERROR);
+
+                // Capture failure details
+                List<?> failures = result.failures();
+                if (!failures.isEmpty()) {
+                    String failureMessage = failures.stream()
+                            .map(Object::toString)
+                            .collect(Collectors.joining("; "));
+                    guardrailSpan.setAttribute(GenAiAttributes.GUARDRAIL_FAILURE_MESSAGE, failureMessage);
+                }
+
+                // Check for retry/reprompt
+                guardrailSpan.setAttribute(GenAiAttributes.GUARDRAIL_RETRY, result.isRetry());
+                guardrailSpan.setAttribute(GenAiAttributes.GUARDRAIL_REPROMPT, result.isReprompt());
+            }
+        } finally {
+            guardrailSpan.end();
+        }
+    }
+
+    /**
+     * Extracts the simple class name from a guardrail class.
+     *
+     * @param guardrailClass the guardrail class
+     * @return the simple class name
+     */
+    private String getGuardrailSimpleName(Class<?> guardrailClass) {
+        if (guardrailClass == null) {
+            return "unknown";
+        }
+        return guardrailClass.getSimpleName();
     }
 
     /**

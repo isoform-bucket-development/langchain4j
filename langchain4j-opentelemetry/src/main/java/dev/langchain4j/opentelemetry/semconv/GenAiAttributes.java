@@ -115,4 +115,41 @@ public final class GenAiAttributes {
      * The user message content.
      */
     public static final AttributeKey<String> GEN_AI_USER_MESSAGE = AttributeKey.stringKey("gen_ai.user.message");
+
+    // Guardrail-specific attributes
+
+    /**
+     * The name of the guardrail class that performed the validation.
+     */
+    public static final AttributeKey<String> GUARDRAIL_NAME = AttributeKey.stringKey("guardrail.name");
+
+    /**
+     * The type of guardrail (input or output).
+     */
+    public static final AttributeKey<String> GUARDRAIL_TYPE = AttributeKey.stringKey("guardrail.type");
+
+    /**
+     * Whether the guardrail validation passed (true) or failed (false).
+     */
+    public static final AttributeKey<Boolean> GUARDRAIL_PASS = AttributeKey.booleanKey("guardrail.pass");
+
+    /**
+     * The result of the guardrail validation (SUCCESS, FAILURE, FATAL, SUCCESS_WITH_RESULT).
+     */
+    public static final AttributeKey<String> GUARDRAIL_RESULT = AttributeKey.stringKey("guardrail.result");
+
+    /**
+     * The failure message if the guardrail validation failed.
+     */
+    public static final AttributeKey<String> GUARDRAIL_FAILURE_MESSAGE = AttributeKey.stringKey("guardrail.failure.message");
+
+    /**
+     * Whether the guardrail triggered a retry.
+     */
+    public static final AttributeKey<Boolean> GUARDRAIL_RETRY = AttributeKey.booleanKey("guardrail.retry");
+
+    /**
+     * Whether the guardrail triggered a reprompt.
+     */
+    public static final AttributeKey<Boolean> GUARDRAIL_REPROMPT = AttributeKey.booleanKey("guardrail.reprompt");
 }
