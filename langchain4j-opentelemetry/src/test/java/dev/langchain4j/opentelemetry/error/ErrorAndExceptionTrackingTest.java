@@ -66,6 +66,13 @@ class ErrorAndExceptionTrackingTest {
     private static final AttributeKey<String> EXCEPTION_MESSAGE = AttributeKey.stringKey("exception.message");
     private static final AttributeKey<String> EXCEPTION_STACKTRACE = AttributeKey.stringKey("exception.stacktrace");
 
+    // Helper to create fatal InputGuardrailResult (uses InputGuardrail interface method)
+    private static final InputGuardrail HELPER_GUARDRAIL = new InputGuardrail() {};
+
+    private static InputGuardrailResult createFatalGuardrailResult(String message) {
+        return HELPER_GUARDRAIL.fatal(message);
+    }
+
     /**
      * Test Case 1: Rate limit error (HTTP 429 Too Many Requests)
      * Expected: Span status ERROR with otel.status_code='ERROR', exception event with rate_limit details
@@ -515,7 +522,7 @@ class ErrorAndExceptionTrackingTest {
             listener.getStartedListener().onEvent(startedEvent);
 
             // Simulate guardrail failure - create the failure result
-            InputGuardrailResult failureResult = InputGuardrailResult.fatal("Prohibited content detected");
+            InputGuardrailResult failureResult = createFatalGuardrailResult("Prohibited content detected");
 
             // Create input guardrail event
             InputGuardrailExecutedEvent guardrailEvent = InputGuardrailExecutedEvent.builder()
@@ -584,7 +591,7 @@ class ErrorAndExceptionTrackingTest {
             listener.getStartedListener().onEvent(startedEvent);
 
             // Create guardrail failure with specific message
-            InputGuardrailResult failureResult = InputGuardrailResult.fatal("Input validation failed: malicious pattern detected");
+            InputGuardrailResult failureResult = createFatalGuardrailResult("Input validation failed: malicious pattern detected");
 
             InputGuardrailExecutedEvent guardrailEvent = InputGuardrailExecutedEvent.builder()
                     .invocationContext(context)
@@ -624,14 +631,14 @@ class ErrorAndExceptionTrackingTest {
         static class ContentModerationGuardrail implements InputGuardrail {
             @Override
             public InputGuardrailResult validate(InputGuardrailRequest request) {
-                return InputGuardrailResult.fatal("Prohibited content detected");
+                return createFatalGuardrailResult("Prohibited content detected");
             }
         }
 
         static class InputValidationGuardrail implements InputGuardrail {
             @Override
             public InputGuardrailResult validate(InputGuardrailRequest request) {
-                return InputGuardrailResult.fatal("Input validation failed");
+                return createFatalGuardrailResult("Input validation failed");
             }
         }
     }
