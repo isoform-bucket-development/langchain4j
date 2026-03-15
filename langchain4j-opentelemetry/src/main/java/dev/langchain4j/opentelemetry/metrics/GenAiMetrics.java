@@ -36,6 +36,11 @@ public final class GenAiMetrics {
      */
     public static final String OUTPUT_TOKENS_COUNTER_NAME = "gen_ai.usage.output_tokens";
 
+    /**
+     * Counter for operation errors.
+     */
+    public static final String ERROR_COUNTER_NAME = "gen_ai.client.operation.error";
+
     // Common dimension attribute keys
     /**
      * The GenAI system/provider (e.g., "openai", "anthropic").
@@ -57,9 +62,15 @@ public final class GenAiMetrics {
      */
     public static final AttributeKey<String> ATTR_TOKEN_TYPE = AttributeKey.stringKey("gen_ai.token.type");
 
+    /**
+     * The error type for categorizing errors (e.g., "rate_limit_exceeded", "authentication_error", "timeout").
+     */
+    public static final AttributeKey<String> ATTR_ERROR_TYPE = AttributeKey.stringKey("error.type");
+
     private final LongCounter tokenUsageCounter;
     private final LongCounter inputTokensCounter;
     private final LongCounter outputTokensCounter;
+    private final LongCounter errorCounter;
 
     /**
      * Creates a new GenAiMetrics instance using the global MeterProvider.
@@ -92,6 +103,11 @@ public final class GenAiMetrics {
                 .setDescription("Measures the number of output (completion) tokens generated")
                 .setUnit("{token}")
                 .build();
+
+        this.errorCounter = meter.counterBuilder(ERROR_COUNTER_NAME)
+                .setDescription("Counts the number of errors in GenAI operations")
+                .setUnit("{error}")
+                .build();
     }
 
     /**
@@ -119,6 +135,15 @@ public final class GenAiMetrics {
      */
     public LongCounter getOutputTokensCounter() {
         return outputTokensCounter;
+    }
+
+    /**
+     * Returns the error counter.
+     *
+     * @return the error counter
+     */
+    public LongCounter getErrorCounter() {
+        return errorCounter;
     }
 
     /**

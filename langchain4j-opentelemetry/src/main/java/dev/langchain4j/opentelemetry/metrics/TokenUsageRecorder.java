@@ -105,6 +105,59 @@ public class TokenUsageRecorder {
     }
 
     /**
+     * Records an error with the specified dimensions.
+     *
+     * @param errorType     the type of error (e.g., "rate_limit_exceeded", "authentication_error", "timeout")
+     * @param system        the GenAI system/provider (e.g., "openai", "anthropic")
+     * @param model         the model name (e.g., "gpt-4o", "claude-3-sonnet")
+     * @param operationName the operation name (e.g., "chat", "completion")
+     */
+    public void recordError(String errorType, String system, String model, String operationName) {
+        Attributes attributes = buildErrorAttributes(errorType, system, model, operationName);
+        recordError(attributes);
+    }
+
+    /**
+     * Records an error with the specified attributes.
+     *
+     * @param attributes the attributes/dimensions for the error metric
+     */
+    public void recordError(Attributes attributes) {
+        metrics.getErrorCounter().add(1, attributes);
+    }
+
+    /**
+     * Builds attributes for error metrics including error type.
+     *
+     * @param errorType     the type of error
+     * @param system        the GenAI system/provider
+     * @param model         the model name
+     * @param operationName the operation name
+     * @return the built attributes
+     */
+    private Attributes buildErrorAttributes(String errorType, String system, String model, String operationName) {
+        AttributesBuilder builder = Attributes.builder();
+
+        if (errorType != null) {
+            builder.put(GenAiMetrics.ATTR_ERROR_TYPE, errorType);
+        }
+
+        if (system != null) {
+            builder.put(GenAiMetrics.ATTR_GEN_AI_SYSTEM, system);
+        }
+
+        if (model != null) {
+            builder.put(GenAiMetrics.ATTR_GEN_AI_REQUEST_MODEL, model);
+        }
+
+        if (operationName != null) {
+            builder.put(GenAiMetrics.ATTR_GEN_AI_OPERATION_NAME, operationName);
+        }
+
+        return builder.build();
+    }
+
+    /**
      * Returns the underlying GenAiMetrics instance.
      *
      * @return the GenAiMetrics instance
