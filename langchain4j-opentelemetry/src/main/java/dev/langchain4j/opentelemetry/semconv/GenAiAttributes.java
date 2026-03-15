@@ -152,4 +152,26 @@ public final class GenAiAttributes {
      * Whether the guardrail triggered a reprompt.
      */
     public static final AttributeKey<Boolean> GUARDRAIL_REPROMPT = AttributeKey.booleanKey("guardrail.reprompt");
+
+    // Tool execution attributes
+
+    /**
+     * The name of the tool being executed.
+     */
+    public static final AttributeKey<String> TOOL_NAME = AttributeKey.stringKey("tool.name");
+
+    /**
+     * The unique identifier of the tool execution request.
+     */
+    public static final AttributeKey<String> TOOL_EXECUTION_ID = AttributeKey.stringKey("tool.execution.id");
+
+    /**
+     * The arguments passed to the tool (JSON string).
+     */
+    public static final AttributeKey<String> TOOL_ARGUMENTS = AttributeKey.stringKey("tool.arguments");
+
+    /**
+     * The result of the tool execution.
+     */
+    public static final AttributeKey<String> TOOL_RESULT = AttributeKey.stringKey("tool.result");
 }

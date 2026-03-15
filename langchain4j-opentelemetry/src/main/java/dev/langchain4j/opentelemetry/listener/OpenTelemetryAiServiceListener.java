@@ -1,6 +1,5 @@
 package dev.langchain4j.opentelemetry.listener;
 
-import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.guardrail.GuardrailResult;
 import dev.langchain4j.guardrail.OutputGuardrailResult;
 import dev.langchain4j.invocation.InvocationContext;
@@ -16,6 +15,7 @@ import dev.langchain4j.observability.api.event.InputGuardrailExecutedEvent;
 import dev.langchain4j.observability.api.event.OutputGuardrailExecutedEvent;
 import dev.langchain4j.observability.api.listener.AiServiceCompletedListener;
 import dev.langchain4j.observability.api.listener.AiServiceErrorListener;
+import dev.langchain4j.observability.api.listener.AiServiceListener;
 import dev.langchain4j.observability.api.listener.AiServiceStartedListener;
 import dev.langchain4j.observability.api.listener.InputGuardrailExecutedListener;
 import dev.langchain4j.observability.api.listener.OutputGuardrailExecutedListener;
@@ -37,23 +37,26 @@ import java.util.stream.Collectors;
  * Creates hierarchical spans for AiService method calls, enabling
  * correlation with nested ChatModel spans.
  *
- * <p>This listener implements multiple AiServiceListener interfaces:
+ * <p>This class provides separate listener implementations for different
+ * AiService events:
  * <ul>
  *   <li>{@link AiServiceStartedListener} - Creates a parent span when an AiService method is invoked</li>
  *   <li>{@link AiServiceCompletedListener} - Ends the span when the method completes successfully</li>
  *   <li>{@link AiServiceErrorListener} - Ends the span with error status when the method fails</li>
+ *   <li>{@link InputGuardrailExecutedListener} - Creates child spans for input guardrail executions</li>
+ *   <li>{@link OutputGuardrailExecutedListener} - Creates child spans for output guardrail executions</li>
  * </ul>
  *
  * <p>The span hierarchy follows the pattern:
  * <pre>
  * [AiService.methodName]      (created by this listener)
- *   └─ [gen_ai.chat]          (created by ChatModelListener)
- *       └─ [tool.execution.*] (created by ToolExecutedEventListener)
+ *   ├─ [guardrail.input.*]    (created by this listener)
+ *   ├─ [gen_ai.chat]          (created by ChatModelListener)
+ *   │   └─ [tool.execution.*] (created by ToolExecutedEventListener)
+ *   └─ [guardrail.output.*]   (created by this listener)
  * </pre>
  */
-public final class OpenTelemetryAiServiceListener
-        implements AiServiceStartedListener, AiServiceCompletedListener, AiServiceErrorListener,
-        InputGuardrailExecutedListener, OutputGuardrailExecutedListener {
+public final class OpenTelemetryAiServiceListener {
 
     private static final String INSTRUMENTATION_NAME = "langchain4j-opentelemetry";
     private static final String INSTRUMENTATION_VERSION = "1.0.0";
@@ -62,10 +65,22 @@ public final class OpenTelemetryAiServiceListener
     private final OpenTelemetryLangChain4jConfig config;
     private final Tracer tracer;
 
+    private final AiServiceStartedListener startedListener;
+    private final AiServiceCompletedListener completedListener;
+    private final AiServiceErrorListener errorListener;
+    private final InputGuardrailExecutedListener inputGuardrailListener;
+    private final OutputGuardrailExecutedListener outputGuardrailListener;
+
     private OpenTelemetryAiServiceListener(Builder builder) {
         this.tracer = builder.tracerProvider.get(INSTRUMENTATION_NAME, INSTRUMENTATION_VERSION);
         this.spanContextManager = new SpanContextManager(tracer);
         this.config = builder.config;
+
+        this.startedListener = this::onStarted;
+        this.completedListener = this::onCompleted;
+        this.errorListener = this::onError;
+        this.inputGuardrailListener = this::onInputGuardrailExecuted;
+        this.outputGuardrailListener = this::onOutputGuardrailExecuted;
     }
 
     /**
@@ -86,8 +101,7 @@ public final class OpenTelemetryAiServiceListener
         return builder().build();
     }
 
-    @Override
-    public void onEvent(AiServiceStartedEvent event) {
+    private void onStarted(AiServiceStartedEvent event) {
         if (!config.isTracingEnabled()) {
             return;
         }
@@ -117,8 +131,7 @@ public final class OpenTelemetryAiServiceListener
         }
     }
 
-    @Override
-    public void onEvent(AiServiceCompletedEvent event) {
+    private void onCompleted(AiServiceCompletedEvent event) {
         if (!config.isTracingEnabled()) {
             return;
         }
@@ -139,8 +152,7 @@ public final class OpenTelemetryAiServiceListener
         }
     }
 
-    @Override
-    public void onEvent(AiServiceErrorEvent event) {
+    private void onError(AiServiceErrorEvent event) {
         if (!config.isTracingEnabled()) {
             return;
         }
@@ -152,8 +164,7 @@ public final class OpenTelemetryAiServiceListener
         spanContextManager.endSpan(ctx.invocationId(), StatusCode.ERROR, error.getMessage());
     }
 
-    @Override
-    public void onEvent(InputGuardrailExecutedEvent event) {
+    private void onInputGuardrailExecuted(InputGuardrailExecutedEvent event) {
         if (!config.isTracingEnabled()) {
             return;
         }
@@ -203,8 +214,7 @@ public final class OpenTelemetryAiServiceListener
         }
     }
 
-    @Override
-    public void onEvent(OutputGuardrailExecutedEvent event) {
+    private void onOutputGuardrailExecuted(OutputGuardrailExecutedEvent event) {
         if (!config.isTracingEnabled()) {
             return;
         }
@@ -269,6 +279,61 @@ public final class OpenTelemetryAiServiceListener
             return "unknown";
         }
         return guardrailClass.getSimpleName();
+    }
+
+    /**
+     * Returns the listener for AiService started events.
+     *
+     * @return the started listener
+     */
+    public AiServiceStartedListener getStartedListener() {
+        return startedListener;
+    }
+
+    /**
+     * Returns the listener for AiService completed events.
+     *
+     * @return the completed listener
+     */
+    public AiServiceCompletedListener getCompletedListener() {
+        return completedListener;
+    }
+
+    /**
+     * Returns the listener for AiService error events.
+     *
+     * @return the error listener
+     */
+    public AiServiceErrorListener getErrorListener() {
+        return errorListener;
+    }
+
+    /**
+     * Returns the listener for input guardrail executed events.
+     *
+     * @return the input guardrail listener
+     */
+    public InputGuardrailExecutedListener getInputGuardrailListener() {
+        return inputGuardrailListener;
+    }
+
+    /**
+     * Returns the listener for output guardrail executed events.
+     *
+     * @return the output guardrail listener
+     */
+    public OutputGuardrailExecutedListener getOutputGuardrailListener() {
+        return outputGuardrailListener;
+    }
+
+    /**
+     * Returns all listeners as a list for convenient registration.
+     *
+     * @return list of all AI service listeners
+     */
+    public List<AiServiceListener<?>> getAllListeners() {
+        return List.of(startedListener, completedListener, errorListener,
+                inputGuardrailListener, outputGuardrailListener);
     }
 
     /**
