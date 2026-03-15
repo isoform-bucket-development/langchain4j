@@ -26,6 +26,8 @@ import io.opentelemetry.context.Scope;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * ChatModelListener implementation that generates OpenTelemetry spans and metrics.
@@ -36,6 +38,8 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class OpenTelemetryChatModelListener implements ChatModelListener {
 
+    private static final Logger LOGGER = Logger.getLogger(OpenTelemetryChatModelListener.class.getName());
+
     private static final String INSTRUMENTATION_NAME = "dev.langchain4j.opentelemetry";
     private static final String INSTRUMENTATION_VERSION = "1.0.0";
 
@@ -45,6 +49,7 @@ public class OpenTelemetryChatModelListener implements ChatModelListener {
     private static final String CONTEXT_KEY = "otel.context";
     private static final String START_TIME_KEY = "otel.start_time";
     private static final String TRACING_SKIPPED_KEY = "otel.tracing_skipped";
+    private static final String OTEL_ERROR_KEY = "otel.error";
 
     private final Tracer tracer;
     private final boolean streaming;
@@ -100,58 +105,68 @@ public class OpenTelemetryChatModelListener implements ChatModelListener {
             return;
         }
 
-        ChatRequest request = requestContext.chatRequest();
-        ModelProvider provider = requestContext.modelProvider();
         Map<Object, Object> attributes = requestContext.attributes();
 
-        // Build span attributes from request
-        AttributesBuilder attrBuilder = Attributes.builder();
+        try {
+            ChatRequest request = requestContext.chatRequest();
+            ModelProvider provider = requestContext.modelProvider();
 
-        if (provider != null) {
-            attrBuilder.put(GenAiAttributes.GEN_AI_SYSTEM, provider.name().toLowerCase());
+            // Build span attributes from request
+            AttributesBuilder attrBuilder = Attributes.builder();
+
+            if (provider != null) {
+                attrBuilder.put(GenAiAttributes.GEN_AI_SYSTEM, provider.name().toLowerCase());
+            }
+
+            String modelName = request.modelName();
+            if (modelName != null) {
+                attrBuilder.put(GenAiAttributes.GEN_AI_REQUEST_MODEL, modelName);
+            }
+
+            Double temperature = request.temperature();
+            if (temperature != null) {
+                attrBuilder.put(GenAiAttributes.GEN_AI_REQUEST_TEMPERATURE, temperature);
+            }
+
+            Double topP = request.topP();
+            if (topP != null) {
+                attrBuilder.put(GenAiAttributes.GEN_AI_REQUEST_TOP_P, topP);
+            }
+
+            Integer maxOutputTokens = request.maxOutputTokens();
+            if (maxOutputTokens != null) {
+                attrBuilder.put(GenAiAttributes.GEN_AI_REQUEST_MAX_TOKENS, maxOutputTokens.longValue());
+            }
+
+            attrBuilder.put(GenAiAttributes.GEN_AI_OPERATION_NAME, "chat");
+            attrBuilder.put(GenAiAttributes.GEN_AI_REQUEST_STREAMING, streaming);
+
+            // Capture parent context for proper context propagation
+            Context parentContext = Context.current();
+
+            // Create and start the span
+            Span span = tracer.spanBuilder(GenAiSpanNames.CHAT)
+                    .setSpanKind(SpanKind.CLIENT)
+                    .setParent(parentContext)
+                    .setAllAttributes(attrBuilder.build())
+                    .startSpan();
+
+            // Make span current and store scope for later cleanup
+            Scope scope = span.makeCurrent();
+
+            // Store span, scope, and context in attributes for retrieval in onResponse/onError
+            attributes.put(SPAN_KEY, span);
+            attributes.put(SCOPE_KEY, scope);
+            attributes.put(CONTEXT_KEY, parentContext);
+            attributes.put(START_TIME_KEY, System.currentTimeMillis());
+        } catch (Throwable t) {
+            // Graceful degradation: log the error but don't break LLM functionality
+            // NFR-4: If OpenTelemetry SDK is misconfigured or unavailable,
+            // the module shall fail gracefully without breaking LLM functionality.
+            LOGGER.log(Level.WARNING, "Failed to create OpenTelemetry span for LLM request. " +
+                    "LLM functionality will continue without tracing.", t);
+            attributes.put(OTEL_ERROR_KEY, Boolean.TRUE);
         }
-
-        String modelName = request.modelName();
-        if (modelName != null) {
-            attrBuilder.put(GenAiAttributes.GEN_AI_REQUEST_MODEL, modelName);
-        }
-
-        Double temperature = request.temperature();
-        if (temperature != null) {
-            attrBuilder.put(GenAiAttributes.GEN_AI_REQUEST_TEMPERATURE, temperature);
-        }
-
-        Double topP = request.topP();
-        if (topP != null) {
-            attrBuilder.put(GenAiAttributes.GEN_AI_REQUEST_TOP_P, topP);
-        }
-
-        Integer maxOutputTokens = request.maxOutputTokens();
-        if (maxOutputTokens != null) {
-            attrBuilder.put(GenAiAttributes.GEN_AI_REQUEST_MAX_TOKENS, maxOutputTokens.longValue());
-        }
-
-        attrBuilder.put(GenAiAttributes.GEN_AI_OPERATION_NAME, "chat");
-        attrBuilder.put(GenAiAttributes.GEN_AI_REQUEST_STREAMING, streaming);
-
-        // Capture parent context for proper context propagation
-        Context parentContext = Context.current();
-
-        // Create and start the span
-        Span span = tracer.spanBuilder(GenAiSpanNames.CHAT)
-                .setSpanKind(SpanKind.CLIENT)
-                .setParent(parentContext)
-                .setAllAttributes(attrBuilder.build())
-                .startSpan();
-
-        // Make span current and store scope for later cleanup
-        Scope scope = span.makeCurrent();
-
-        // Store span, scope, and context in attributes for retrieval in onResponse/onError
-        attributes.put(SPAN_KEY, span);
-        attributes.put(SCOPE_KEY, scope);
-        attributes.put(CONTEXT_KEY, parentContext);
-        attributes.put(START_TIME_KEY, System.currentTimeMillis());
     }
 
     @Override
@@ -162,6 +177,13 @@ public class OpenTelemetryChatModelListener implements ChatModelListener {
         Boolean tracingSkipped = (Boolean) attributes.get(TRACING_SKIPPED_KEY);
         if (Boolean.TRUE.equals(tracingSkipped)) {
             attributes.remove(TRACING_SKIPPED_KEY);
+            return;
+        }
+
+        // Check if OTel error occurred during request
+        Boolean otelError = (Boolean) attributes.get(OTEL_ERROR_KEY);
+        if (Boolean.TRUE.equals(otelError)) {
+            attributes.remove(OTEL_ERROR_KEY);
             return;
         }
 
@@ -206,12 +228,23 @@ public class OpenTelemetryChatModelListener implements ChatModelListener {
             }
 
             span.setStatus(StatusCode.OK);
+        } catch (Throwable t) {
+            // Graceful degradation: log the error but don't break LLM functionality
+            LOGGER.log(Level.WARNING, "Failed to set OpenTelemetry span attributes for LLM response. " +
+                    "LLM functionality will continue.", t);
         } finally {
-            // Clean up
-            if (scope != null) {
-                scope.close();
+            // Clean up - also wrap in try-catch for graceful degradation
+            try {
+                if (scope != null) {
+                    scope.close();
+                }
+                if (span != null) {
+                    span.end();
+                }
+            } catch (Throwable t) {
+                LOGGER.log(Level.WARNING, "Failed to close OpenTelemetry span. " +
+                        "LLM functionality will continue.", t);
             }
-            span.end();
 
             // Remove from attributes
             attributes.remove(SPAN_KEY);
@@ -232,6 +265,13 @@ public class OpenTelemetryChatModelListener implements ChatModelListener {
             return;
         }
 
+        // Check if OTel error occurred during request
+        Boolean otelError = (Boolean) attributes.get(OTEL_ERROR_KEY);
+        if (Boolean.TRUE.equals(otelError)) {
+            attributes.remove(OTEL_ERROR_KEY);
+            return;
+        }
+
         Span span = (Span) attributes.get(SPAN_KEY);
         Scope scope = (Scope) attributes.get(SCOPE_KEY);
 
@@ -246,18 +286,30 @@ public class OpenTelemetryChatModelListener implements ChatModelListener {
             span.recordException(error);
             span.setStatus(StatusCode.ERROR, error.getMessage());
             span.setAttribute(GenAiAttributes.ERROR_TYPE, error.getClass().getName());
+        } catch (Throwable t) {
+            // Graceful degradation: log the error but don't break LLM error handling
+            LOGGER.log(Level.WARNING, "Failed to record error in OpenTelemetry span. " +
+                    "LLM error handling will continue.", t);
         } finally {
-            // Clean up
-            if (scope != null) {
-                scope.close();
+            // Clean up - also wrap in try-catch for graceful degradation
+            try {
+                if (scope != null) {
+                    scope.close();
+                }
+                if (span != null) {
+                    span.end();
+                }
+            } catch (Throwable t) {
+                LOGGER.log(Level.WARNING, "Failed to close OpenTelemetry span after error. " +
+                        "LLM functionality will continue.", t);
             }
-            span.end();
 
             // Remove from attributes
             attributes.remove(SPAN_KEY);
             attributes.remove(SCOPE_KEY);
             attributes.remove(CONTEXT_KEY);
             attributes.remove(START_TIME_KEY);
+            attributes.remove(OTEL_ERROR_KEY);
         }
     }
 
